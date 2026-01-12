@@ -16,9 +16,11 @@ import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSnapHelper
 import com.example.kotlinfrontend.R
+import com.example.kotlinfrontend.data.AppRepositories
 import com.example.kotlinfrontend.data.FilterPresetStore
 import com.example.kotlinfrontend.databinding.ActivityProductListBinding
 import com.example.kotlinfrontend.model.FilterPreset
+import com.example.kotlinfrontend.model.Product
 import com.example.kotlinfrontend.model.ProductFilter
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -154,8 +156,34 @@ class ProductListActivity : ComponentActivity() {
             return
         }
 
+        val cartRepo = AppRepositories.cart(this)
+
         categories.forEach { category ->
             val sectionView = CategorySectionView(this)
+            sectionView.setCartCallbacks(
+                cartQtyProvider = { productId ->
+                    cartRepo.items.value.firstOrNull { it.productId == productId }?.quantity ?: 0
+                },
+                onAddToCart = { product: Product, qty: Int ->
+                    cartRepo.addItem(product, qty)
+                    Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
+                    // Force redraw of preview rows so qty text reflects latest state.
+                    rebuildGroupedSections()
+                },
+                onIncrementInCart = { product: Product ->
+                    cartRepo.addItem(product, 1)
+                    Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                    rebuildGroupedSections()
+                },
+                onDecrementInCart = { product: Product ->
+                    val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
+                    val newQty = current - 1
+                    cartRepo.updateQty(product.id, newQty)
+                    Snackbar.make(binding.root, if (newQty <= 0) "Removed item." else "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                    rebuildGroupedSections()
+                }
+            )
+
             sectionView.bindHeader(category) {
                 // See all: switch to the category-specific paged list
                 viewModel.selectCategory(category)
@@ -240,11 +268,63 @@ class ProductListActivity : ComponentActivity() {
         binding = ActivityProductListBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val productAdapter = ProductAdapter()
+        // Cart integration (persistent, process-death safe).
+        val cartRepo = AppRepositories.cart(this)
+
+        val productAdapter = ProductAdapter(
+            cartQtyProvider = { productId ->
+                cartRepo.items.value.firstOrNull { it.productId == productId }?.quantity ?: 0
+            }
+        ).apply {
+            // These callbacks need to reference the adapter instance; using apply avoids "val used in its own initializer".
+            setCartCallbacks(
+                onAddToCart = { product, qty ->
+                    cartRepo.addItem(product, qty)
+                    Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
+                    this@apply.notifyDataSetChanged()
+                },
+                onIncrementInCart = { product ->
+                    cartRepo.addItem(product, 1)
+                    Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                    this@apply.notifyDataSetChanged()
+                },
+                onDecrementInCart = { product ->
+                    val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
+                    val newQty = current - 1
+                    cartRepo.updateQty(product.id, newQty)
+                    Snackbar.make(binding.root, if (newQty <= 0) "Removed item." else "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                    this@apply.notifyDataSetChanged()
+                }
+            )
+        }
 
         val footer = ProductLoadStateAdapter(onRetry = { productAdapter.retry() })
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = productAdapter.withLoadStateFooter(footer)
+
+        // Toolbar: cart button + badge
+        binding.toolbar.inflateMenu(R.menu.menu_product_list)
+        val cartItem = binding.toolbar.menu.findItem(R.id.action_cart)
+        val badgeController = CartBadgeController(binding.toolbar, cartItem)
+        badgeController.setOnClickListener {
+            startActivity(Intent(this, CartActivity::class.java))
+        }
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_cart) {
+                startActivity(Intent(this, CartActivity::class.java))
+                true
+            } else {
+                false
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AppRepositories.cartItemCount(this@ProductListActivity).collectLatest { count ->
+                    badgeController.setCount(count)
+                }
+            }
+        }
 
         setupRecyclerAnimations()
         setupSearchAndFilters(productAdapter)

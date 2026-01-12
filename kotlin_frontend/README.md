@@ -4,6 +4,11 @@ This module implements **lazy loading / infinite scroll** for the product list u
 
 ## Features implemented
 - Infinite scroll / paging (efficient incremental fetch)
+- Shopping cart (local, persistent):
+  - Add to cart from product rows (both paged list and grouped category previews)
+  - Cart screen grouped by category with quantity controls, item subtotals, and cart subtotal
+  - Remove single item, clear cart, and a stub Checkout action
+  - Cart persists across app restarts/process death via SharedPreferences + JSON
 - Category browsing (chips) + optional grouped view:
   - Horizontally scrollable **category chips** (RecyclerView) with **snap-to-item** fling behavior: **All (grouped)** + each backend category
   - Chips show **category icons** (known categories mapped to vector drawables; unknown categories use a generic icon)
@@ -40,6 +45,20 @@ This module implements **lazy loading / infinite scroll** for the product list u
   - **Delete** a preset you no longer need.
 - Use **Clear all** to reset both query and filters.
 - Pull-to-refresh will reload using the current search + filters.
+
+### Cart usage
+- Tap **Add to cart** on any product row to add 1 item.
+- Use the **+ / -** controls on the product row to adjust the quantity in your cart.
+- Tap the **Cart** icon in the top toolbar to open the cart.
+- In the cart:
+  - Items are **grouped by category**
+  - Use **+ / -** to update quantity (decrement to 0 removes the item)
+  - Use **Remove** for a single item
+  - Use **Clear cart** to remove all items
+  - Tap **Checkout** to see a stub action (not implemented)
+
+### Cart persistence
+Cart data is stored locally on-device using **SharedPreferences + JSON**, so it survives app restarts and process death.
 
 ## UI polish (animations, chips, illustrated states)
 This module includes subtle UI polish while preserving Paging 3 behavior (no full-screen flicker during refresh):

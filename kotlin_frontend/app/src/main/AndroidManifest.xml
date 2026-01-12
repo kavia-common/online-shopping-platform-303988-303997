@@ -12,6 +12,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.CartActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ProductListActivity"
             android:exported="true">
             <intent-filter>

@@ -8,8 +8,12 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.kotlinfrontend.databinding.ItemProductBinding
 import com.example.kotlinfrontend.model.Product
 
-class CategoryPreviewAdapter :
-    ListAdapter<Product, CategoryPreviewAdapter.ProductViewHolder>(DIFF) {
+class CategoryPreviewAdapter(
+    private val cartQtyProvider: ((productId: String) -> Int)? = null,
+    private val onAddToCart: ((product: Product, qty: Int) -> Unit)? = null,
+    private val onIncrementInCart: ((product: Product) -> Unit)? = null,
+    private val onDecrementInCart: ((product: Product) -> Unit)? = null
+) : ListAdapter<Product, CategoryPreviewAdapter.ProductViewHolder>(DIFF) {
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<Product>() {
@@ -25,10 +29,23 @@ class CategoryPreviewAdapter :
         private val binding: ItemProductBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(item: Product) {
+        fun bind(
+            item: Product,
+            cartQtyProvider: ((productId: String) -> Int)?,
+            onAddToCart: ((product: Product, qty: Int) -> Unit)?,
+            onIncrementInCart: ((product: Product) -> Unit)?,
+            onDecrementInCart: ((product: Product) -> Unit)?
+        ) {
             binding.title.text = item.title
             binding.description.text = item.description.orEmpty()
             binding.price.text = item.priceText()
+
+            val currentQty = cartQtyProvider?.invoke(item.id) ?: 0
+            binding.qtyText.text = currentQty.toString()
+
+            binding.addToCartButton.setOnClickListener { onAddToCart?.invoke(item, 1) }
+            binding.incrementButton.setOnClickListener { onIncrementInCart?.invoke(item) }
+            binding.decrementButton.setOnClickListener { onDecrementInCart?.invoke(item) }
         }
     }
 
@@ -43,7 +60,13 @@ class CategoryPreviewAdapter :
 
     override fun onBindViewHolder(holder: ProductViewHolder, position: Int) {
         val item = getItem(position)
-        holder.bind(item)
+        holder.bind(
+            item = item,
+            cartQtyProvider = cartQtyProvider,
+            onAddToCart = onAddToCart,
+            onIncrementInCart = onIncrementInCart,
+            onDecrementInCart = onDecrementInCart
+        )
 
         holder.itemView.subtleAppear(
             durationMs = holder.itemView.context.resources.getInteger(

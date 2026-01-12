@@ -22,11 +22,19 @@ class OrderRepository(
     )
 
     // PUBLIC_INTERFACE
-    suspend fun createOrder(email: String?, items: List<Pair<String, Int>>, couponCode: String? = null): Order {
-        /** Create an order with (productId, quantity) items and optional couponCode. */
+    suspend fun createOrder(
+        email: String?,
+        items: List<Pair<String, Int>>,
+        couponCode: String? = null,
+        paymentMethod: String? = null,
+        paymentReference: String? = null
+    ): Order {
+        /** Create an order with (productId, quantity) items and optional couponCode + payment metadata. */
         val body = OrderCreateRequestDto(
             email = email?.trim()?.ifBlank { null },
             couponCode = couponCode?.trim()?.ifBlank { null },
+            paymentMethod = paymentMethod?.trim()?.ifBlank { null },
+            paymentReference = paymentReference?.trim()?.ifBlank { null },
             items = items.map { (productId, quantity) ->
                 OrderCreateItemRequestDto(productId = productId, quantity = quantity)
             }

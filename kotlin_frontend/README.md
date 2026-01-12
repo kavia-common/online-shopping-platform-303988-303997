@@ -179,11 +179,38 @@ Edit:
 From the Cart screen:
 - Tap **Checkout**
 - Fill required fields (name, email, shipping address)
-- Payment is a **mock** toggle: keep **Mock payment success** enabled to proceed
+
+### Payment methods (new)
+The checkout now includes a **payment method selection**:
+- **Credit / Debit Card** (placeholder)
+- **Online Wallet** (generic)
+- **Cash on Delivery**
+
+The app stores the **last used payment method** locally (SharedPreferences) and will **preselect it** on your next checkout.
+
+### Payment processing step
+Before the order is created, the app runs a **simulated payment processing** step:
+- A loading spinner is shown while processing.
+- If the payment is **declined**, a **clear inline error message** is shown under the Payment section and you can retry.
+- Network/server issues during **order creation** still show **Snackbars** with **Retry**.
+
+For demo/testing, there is a toggle:
+- **Mock payment approval (toggle to simulate decline)**
+  - Turn it **off** to simulate a declined transaction for Card/Wallet methods.
+  - **Cash on Delivery** is treated as approved (no decline).
+
+### Place order
 - Tap **Place order**
   - On success the cart is cleared locally and an **Order confirmation** screen is shown
   - Tap **View orders** to open the Orders list
   - When returning to Cart, a Snackbar confirms the order (with a quick link to Orders)
+
+#### Backend compatibility note
+Order create requests now include optional payment metadata fields:
+- `paymentMethod`
+- `paymentReference`
+
+If the backend does not support these fields, it should ignore them; the app keeps them nullable to avoid breaking compatibility.
 
 ## Backend API configuration
 

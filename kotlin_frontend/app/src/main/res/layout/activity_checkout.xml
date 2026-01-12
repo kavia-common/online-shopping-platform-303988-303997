@@ -502,17 +502,53 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Payment (mock)"
+                        android:text="Payment"
                         android:textColor="@color/ocean_text"
                         android:textStyle="bold" />
+
+                    <RadioGroup
+                        android:id="@+id/paymentMethodRadioGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
+
+                        <RadioButton
+                            android:id="@+id/paymentMethodCardRadio"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Credit / Debit Card (placeholder)" />
+
+                        <RadioButton
+                            android:id="@+id/paymentMethodWalletRadio"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Online Wallet (generic)" />
+
+                        <RadioButton
+                            android:id="@+id/paymentMethodCodRadio"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Cash on Delivery" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:id="@+id/paymentInlineErrorText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text=""
+                        android:textColor="@color/ocean_error"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/mockPaymentSwitch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:checked="true"
-                        android:text="Mock payment success" />
+                        android:text="Mock payment approval (toggle to simulate decline)" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

@@ -17,6 +17,7 @@ import com.example.kotlinfrontend.R
 import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.databinding.ActivityCheckoutBinding
+import com.example.kotlinfrontend.model.PaymentMethod
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
@@ -26,7 +27,13 @@ import java.util.Locale
 /**
  * Checkout screen.
  *
- * Captures customer identity + shipping address (placeholders for now) and submits an order to backend.
+ * Captures customer identity + shipping address and submits an order to backend.
+ *
+ * Payment:
+ * - User selects a payment method (Card, Wallet, COD).
+ * - App performs a simulated payment step (loading/success/decline with retry).
+ * - On success, order creation proceeds; payment metadata is attached to the order create request.
+ *
  * Coupon support:
  * - Apply/remove coupon before placing order; totals update reactively.
  * - Saved coupons + suggestions via exposed dropdown; local-only fallback.
@@ -52,15 +59,26 @@ class CheckoutActivity : ComponentActivity() {
         setupToolbar()
         setupFormListeners()
         setupCouponSuggestions()
+        setupPaymentMethodUi()
         bindState()
 
         viewModel.prefillEmailIfAvailable()
+        viewModel.applyLastPaymentMethodIfAvailable()
     }
 
     private fun setupToolbar() {
         binding.toolbar.title = "Checkout"
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { finish() }
+    }
+
+    private fun setupPaymentMethodUi() {
+        // Ensure one is selected even if state restoration didn't happen yet.
+        when (viewModel.form.value.selectedPaymentMethodId) {
+            PaymentMethod.Card.ID -> binding.paymentMethodCardRadio.isChecked = true
+            PaymentMethod.OnlineWallet.ID -> binding.paymentMethodWalletRadio.isChecked = true
+            PaymentMethod.CashOnDelivery.ID -> binding.paymentMethodCodRadio.isChecked = true
+        }
     }
 
     private fun setupFormListeners() {
@@ -86,6 +104,16 @@ class CheckoutActivity : ComponentActivity() {
 
         binding.mockPaymentSwitch.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setMockPaymentSuccess(isChecked)
+        }
+
+        binding.paymentMethodRadioGroup.setOnCheckedChangeListener { _, checkedId ->
+            val methodId = when (checkedId) {
+                R.id.paymentMethodCardRadio -> PaymentMethod.Card.ID
+                R.id.paymentMethodWalletRadio -> PaymentMethod.OnlineWallet.ID
+                R.id.paymentMethodCodRadio -> PaymentMethod.CashOnDelivery.ID
+                else -> PaymentMethod.Card.ID
+            }
+            viewModel.updatePaymentMethod(methodId)
         }
 
         binding.placeOrderButton.setOnClickListener {
@@ -152,6 +180,13 @@ class CheckoutActivity : ComponentActivity() {
 
                     if (binding.mockPaymentSwitch.isChecked != form.mockPaymentSuccess) {
                         binding.mockPaymentSwitch.isChecked = form.mockPaymentSuccess
+                    }
+
+                    // Keep radio buttons in sync (important for restore / preselect).
+                    when (form.selectedPaymentMethodId) {
+                        PaymentMethod.Card.ID -> if (!binding.paymentMethodCardRadio.isChecked) binding.paymentMethodCardRadio.isChecked = true
+                        PaymentMethod.OnlineWallet.ID -> if (!binding.paymentMethodWalletRadio.isChecked) binding.paymentMethodWalletRadio.isChecked = true
+                        PaymentMethod.CashOnDelivery.ID -> if (!binding.paymentMethodCodRadio.isChecked) binding.paymentMethodCodRadio.isChecked = true
                     }
                 }
             }
@@ -268,6 +303,32 @@ class CheckoutActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.paymentState.collectLatest { ps ->
+                    when (ps) {
+                        CheckoutViewModel.PaymentState.Idle -> {
+                            binding.paymentInlineErrorText.isVisible = false
+                            binding.paymentInlineErrorText.text = ""
+                        }
+                        CheckoutViewModel.PaymentState.Processing -> {
+                            binding.paymentInlineErrorText.isVisible = false
+                            binding.paymentInlineErrorText.text = ""
+                        }
+                        is CheckoutViewModel.PaymentState.Declined -> {
+                            binding.paymentInlineErrorText.isVisible = true
+                            binding.paymentInlineErrorText.text = ps.message
+                        }
+                        is CheckoutViewModel.PaymentState.Succeeded -> {
+                            // We don't show a success banner; the flow proceeds to order creation immediately.
+                            binding.paymentInlineErrorText.isVisible = false
+                            binding.paymentInlineErrorText.text = ""
+                        }
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.submitState.collectLatest { state ->
                     val isLoading = state is CheckoutViewModel.SubmitState.Loading
                     setLoading(isLoading)
@@ -284,7 +345,7 @@ class CheckoutActivity : ComponentActivity() {
                         }
 
                         is CheckoutViewModel.SubmitState.Error -> {
-                            // Keep snackbars for order submission errors.
+                            // Keep snackbars for network/server/order submission errors.
                             Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG)
                                 .setAction("Retry") { viewModel.placeOrder() }
                                 .show()

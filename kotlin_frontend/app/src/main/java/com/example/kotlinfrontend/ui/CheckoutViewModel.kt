@@ -9,21 +9,25 @@ import com.example.kotlinfrontend.data.AppRepositories
 import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.data.OrderRepository
+import com.example.kotlinfrontend.data.PaymentPrefs
 import com.example.kotlinfrontend.model.CartItem
 import com.example.kotlinfrontend.model.CartTotals
 import com.example.kotlinfrontend.model.Coupon
+import com.example.kotlinfrontend.model.PaymentMethod
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
+import java.util.UUID
 
 /**
  * ViewModel for the checkout screen.
  *
- * Holds all form state (rotation-safe via SavedStateHandle) and performs the place-order call
- * with lifecycle-safe coroutines (viewModelScope).
+ * Holds all form state (rotation-safe via SavedStateHandle) and performs a simulated payment step
+ * before creating the order.
  */
 class CheckoutViewModel(
     application: Application,
@@ -43,7 +47,8 @@ class CheckoutViewModel(
         val country: String = "",
         val note: String = "",
         val mockPaymentSuccess: Boolean = true,
-        val couponInput: String = ""
+        val couponInput: String = "",
+        val selectedPaymentMethodId: String = PaymentMethod.Card.ID
     )
 
     data class FieldErrors(
@@ -56,6 +61,21 @@ class CheckoutViewModel(
         val country: String? = null
     )
 
+    sealed class PaymentState {
+        data object Idle : PaymentState()
+        data object Processing : PaymentState()
+
+        /**
+         * Payment was declined/failed in a non-network way. Show inline message and allow retry.
+         */
+        data class Declined(val message: String) : PaymentState()
+
+        /**
+         * Payment succeeded (simulated). We keep the reference for passing to order create.
+         */
+        data class Succeeded(val paymentReference: String) : PaymentState()
+    }
+
     sealed class SubmitState {
         data object Idle : SubmitState()
         data object Loading : SubmitState()
@@ -67,7 +87,7 @@ class CheckoutViewModel(
     }
 
     private val _form = MutableStateFlow(
-        savedStateHandle.get<FormState>(KEY_FORM) ?: FormState()
+        savedStateHandle.get<FormState>(KEY_FORM) ?: initialFormState()
     )
     val form: StateFlow<FormState> = _form.asStateFlow()
 
@@ -76,6 +96,9 @@ class CheckoutViewModel(
 
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
+
+    private val _paymentState = MutableStateFlow<PaymentState>(PaymentState.Idle)
+    val paymentState: StateFlow<PaymentState> = _paymentState.asStateFlow()
 
     val cartItems: StateFlow<List<CartItem>> = cartRepo.items
 
@@ -95,6 +118,13 @@ class CheckoutViewModel(
         if (!identityEmail.isNullOrBlank() && _form.value.email.isBlank()) {
             updateEmail(identityEmail)
         }
+    }
+
+    // PUBLIC_INTERFACE
+    fun applyLastPaymentMethodIfAvailable() {
+        /** Loads last used payment method from SharedPreferences and applies it to form state. */
+        val last = PaymentPrefs.getLastPaymentMethod(getApplication()) ?: return
+        updatePaymentMethod(last.id, persistAsLastUsed = false)
     }
 
     // PUBLIC_INTERFACE
@@ -147,8 +177,25 @@ class CheckoutViewModel(
 
     // PUBLIC_INTERFACE
     fun setMockPaymentSuccess(enabled: Boolean) {
-        /** Placeholder payment toggle. If disabled, submission is blocked with inline error. */
+        /** Toggle for simulated payment approval/decline. */
         setForm(_form.value.copy(mockPaymentSuccess = enabled))
+        // If user switches to success, clear the inline declined state to reduce confusion.
+        if (enabled && _paymentState.value is PaymentState.Declined) {
+            _paymentState.value = PaymentState.Idle
+        }
+    }
+
+    // PUBLIC_INTERFACE
+    fun updatePaymentMethod(methodId: String, persistAsLastUsed: Boolean = true) {
+        /** Update selected payment method and optionally persist as last-used. */
+        setForm(_form.value.copy(selectedPaymentMethodId = methodId))
+        if (persistAsLastUsed) {
+            PaymentMethod.fromId(methodId)?.let { PaymentPrefs.setLastPaymentMethod(getApplication(), it) }
+        }
+        // Switching method clears any previous decline message.
+        if (_paymentState.value is PaymentState.Declined) {
+            _paymentState.value = PaymentState.Idle
+        }
     }
 
     // PUBLIC_INTERFACE
@@ -204,11 +251,11 @@ class CheckoutViewModel(
     // PUBLIC_INTERFACE
     fun placeOrder() {
         /**
-         * Validates the form, maps cart items -> backend Order create request, calls API, and clears cart on success.
+         * Validates the form, runs a simulated payment processing step, then maps cart items ->
+         * backend Order create request, calls API, and clears cart on success.
          *
-         * Coupon:
-         * - We include couponCode when repository currently has one.
-         * - If backend ignores/doesn't support it, request remains compatible.
+         * Network errors are reported via snackbars (SubmitState.Error), while payment declines are
+         * reported inline via PaymentState.Declined.
          */
         val items = cartRepo.items.value
         if (items.isEmpty()) {
@@ -228,25 +275,47 @@ class CheckoutViewModel(
             return
         }
 
-        if (!form.mockPaymentSuccess) {
-            _submitState.value = SubmitState.Error(
-                message = "Payment failed (mock). Enable “Mock payment success” to continue."
-            )
-            return
-        }
-
+        // Reset error holders before starting any async work.
         _fieldErrors.value = FieldErrors()
         _submitState.value = SubmitState.Loading
+        _paymentState.value = PaymentState.Processing
 
         viewModelScope.launch {
+            // Step 1) Payment processing (simulated for now)
+            val paymentResult = runPaymentSimulation(form)
+
+            when (paymentResult) {
+                is PaymentState.Declined -> {
+                    _paymentState.value = paymentResult
+                    _submitState.value = SubmitState.Idle
+                    return@launch
+                }
+                is PaymentState.Succeeded -> {
+                    _paymentState.value = paymentResult
+                }
+                else -> {
+                    // Defensive: treat unknown state as failure.
+                    _paymentState.value = PaymentState.Declined("Payment could not be processed. Please try again.")
+                    _submitState.value = SubmitState.Idle
+                    return@launch
+                }
+            }
+
+            // Step 2) Create order
             try {
                 val pairs = items.map { it.productId to it.quantity }
                 val couponCode = cartRepo.coupon.value?.code
 
+                val pm = PaymentMethod.fromId(form.selectedPaymentMethodId)
+                val paymentMethodId = pm?.id
+                val paymentRef = (paymentState.value as? PaymentState.Succeeded)?.paymentReference
+
                 val created = orderRepo.createOrder(
                     email = form.email,
                     items = pairs,
-                    couponCode = couponCode
+                    couponCode = couponCode,
+                    paymentMethod = paymentMethodId,
+                    paymentReference = paymentRef
                 )
 
                 // Clear local cart after successful order creation.
@@ -257,8 +326,19 @@ class CheckoutViewModel(
                 _submitState.value = SubmitState.Success(orderId = orderId, total = total)
             } catch (t: Throwable) {
                 _submitState.value = mapError(t)
+            } finally {
+                // Keep payment state as-is so the UI can show the last outcome.
+                // (Success navigates away immediately anyway.)
             }
         }
+    }
+
+    private fun initialFormState(): FormState {
+        // Prefer last used method if available, otherwise default.
+        val last = PaymentPrefs.getLastPaymentMethod(getApplication())
+        return FormState(
+            selectedPaymentMethodId = last?.id ?: PaymentMethod.Card.ID
+        )
     }
 
     private fun setForm(newForm: FormState) {
@@ -291,6 +371,23 @@ class CheckoutViewModel(
             postalCode = req(form.postalCode),
             country = req(form.country)
         )
+    }
+
+    private suspend fun runPaymentSimulation(form: FormState): PaymentState {
+        // A small delay to show progress.
+        delay(900)
+
+        // If user selected Cash on Delivery, treat as "approved" without decline.
+        if (form.selectedPaymentMethodId == PaymentMethod.CashOnDelivery.ID) {
+            return PaymentState.Succeeded(paymentReference = "cod-" + UUID.randomUUID().toString().take(8))
+        }
+
+        // For other methods, use the mock toggle to simulate approval/decline.
+        if (!form.mockPaymentSuccess) {
+            return PaymentState.Declined("Transaction declined. Please try another payment method or retry.")
+        }
+
+        return PaymentState.Succeeded(paymentReference = "mock-" + UUID.randomUUID().toString().take(12))
     }
 
     private fun mapError(t: Throwable): SubmitState.Error {

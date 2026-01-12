@@ -80,6 +80,22 @@ data class OrderCreateRequestDto(
     @Json(name = "couponCode")
     val couponCode: String? = null,
 
+    /**
+     * Optional payment method metadata.
+     *
+     * If the backend doesn't support these fields, it should ignore unknown fields.
+     * We keep them nullable so existing calls remain compatible.
+     */
+    @Json(name = "paymentMethod")
+    val paymentMethod: String? = null,
+
+    /**
+     * Optional payment reference/id from a payment provider. For now we generate a local mock id
+     * when simulated payment succeeds.
+     */
+    @Json(name = "paymentReference")
+    val paymentReference: String? = null,
+
     @Json(name = "items")
     val items: List<OrderCreateItemRequestDto>
 )

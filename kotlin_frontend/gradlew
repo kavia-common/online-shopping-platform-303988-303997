@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Minimal Gradle wrapper bootstrap script.
+# For full wrapper behavior, the standard Gradle wrapper scripts should be used.
+# This simplified script is sufficient for CI execution in many environments.
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+GRADLE_WRAPPER_JAR="$DIR/gradle/wrapper/gradle-wrapper.jar"
+
+if [ ! -f "$GRADLE_WRAPPER_JAR" ]; then
+  echo "Missing gradle-wrapper.jar. Please add the standard Gradle wrapper jar to gradle/wrapper/."
+  exit 1
+fi
+
+# Some wrapper jars (including ones vendored from Gradle sources) may not include a Main-Class
+# attribute in the manifest. Invoke the wrapper main class explicitly.
+java -cp "$GRADLE_WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"

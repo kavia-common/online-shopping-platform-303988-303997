@@ -4,7 +4,9 @@ import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.graphics.Paint
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -180,13 +182,30 @@ class ProductAdapter(
 
         private val tvName: TextView = itemView.findViewById(R.id.tv_name)
         private val tvMeta: TextView = itemView.findViewById(R.id.tv_meta)
+
+        private val tvSaleBadge: TextView = itemView.findViewById(R.id.tv_sale_badge)
+        private val tvSalePrice: TextView = itemView.findViewById(R.id.tv_sale_price)
         private val tvPrice: TextView = itemView.findViewById(R.id.tv_price)
+        private val tvOriginalPrice: TextView = itemView.findViewById(R.id.tv_original_price)
+
+        private val imageDots: LinearLayout = itemView.findViewById(R.id.image_dots)
+
         private val btnFavorite: ImageButton = itemView.findViewById(R.id.btn_favorite)
 
         fun bind(product: Product, repo: ShopRepository?) {
             tvName.text = product.name
             tvMeta.text = repo?.getCategoryName(product.categoryId) ?: ""
-            tvPrice.text = product.formattedPrice()
+
+            bindSaleUi(product)
+
+            // Multi-image hint: we do not load images; this is a subtle indicator that more media exists.
+            val showDots = product.hasMultipleImages()
+            imageDots.visibility = if (showDots) View.VISIBLE else View.GONE
+            imageDots.contentDescription = if (showDots) {
+                itemView.context.getString(R.string.cd_multiple_images, product.imageUrls.size)
+            } else {
+                null
+            }
 
             // Keep row click behavior unchanged.
             itemView.setOnClickListener { onClick(product) }
@@ -198,6 +217,57 @@ class ProductAdapter(
                 repo?.toggleFavorite(product.id)
                 // We don't call notify here because adapter does not own repo observation.
                 // CatalogFragment observes favorites and will refresh this item only.
+            }
+        }
+
+        private fun bindSaleUi(product: Product) {
+            val context = itemView.context
+
+            val saleCents = product.effectiveSalePriceCents()
+            val isOnSale = product.isOnSale && saleCents != null
+
+            // Badge
+            if (isOnSale) {
+                val pct = product.effectiveDiscountPercent()
+                tvSaleBadge.text = if (pct != null) {
+                    context.getString(R.string.sale_badge_percent, pct)
+                } else {
+                    context.getString(R.string.sale_badge)
+                }
+                tvSaleBadge.visibility = View.VISIBLE
+            } else {
+                tvSaleBadge.visibility = View.GONE
+            }
+
+            // Prices
+            if (isOnSale) {
+                tvSalePrice.visibility = View.VISIBLE
+                tvSalePrice.text = product.formattedPriceFromCents(saleCents!!)
+
+                tvPrice.text = product.formattedPriceFromCents(product.priceCents)
+                tvPrice.paintFlags = tvPrice.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                tvPrice.setTextColor(context.getColor(R.color.ocean_muted_text))
+
+                tvOriginalPrice.visibility = View.GONE
+            } else {
+                tvSalePrice.visibility = View.GONE
+
+                tvPrice.text = product.formattedPrice()
+                tvPrice.paintFlags = tvPrice.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                tvPrice.setTextColor(context.getColor(R.color.ocean_price))
+
+                tvOriginalPrice.visibility = View.GONE
+            }
+
+            // Accessibility: make sure screen readers read the effective price meaningfully.
+            tvPrice.contentDescription = if (isOnSale) {
+                context.getString(
+                    R.string.cd_price_on_sale,
+                    tvSalePrice.text,
+                    tvPrice.text
+                )
+            } else {
+                context.getString(R.string.cd_price_regular, tvPrice.text)
             }
         }
 

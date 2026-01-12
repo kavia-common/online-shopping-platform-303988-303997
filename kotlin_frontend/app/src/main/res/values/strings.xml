@@ -51,6 +51,23 @@
 
     <string name="footer_text">Ocean Shop • Demo e-commerce UI (mock data)</string>
 
+    <!-- Product media + sale -->
+    <string name="sale_badge">SALE</string>
+    <string name="sale_badge_percent">%1$d%% OFF</string>
+    <string name="specs_title">Specs</string>
+    <string name="product_not_found">Product not found</string>
+
+    <!-- Accessibility -->
+    <string name="cd_product_image">Product image</string>
+    <string name="cd_product_gallery">Product image gallery</string>
+    <string name="cd_gallery_image_position">Image %1$d of %2$d</string>
+    <string name="cd_multiple_images">%1$d product images available</string>
+    <string name="cd_gallery_dots">Gallery position indicators</string>
+    <string name="cd_sale_badge">Sale item</string>
+    <string name="cd_price_on_sale">On sale: %1$s. Original price: %2$s.</string>
+    <string name="cd_price_regular">Price: %1$s.</string>
+    <string name="cd_product_specs">Product specifications</string>
+
     <!-- Pagination -->
     <string name="loading_more">Loading more</string>
 </resources>

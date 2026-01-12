@@ -25,12 +25,102 @@ object ShopRepository {
     )
 
     private val products: List<Product> = listOf(
-        Product("p1", "Ocean Tee", "c1", 2499, "Soft cotton tee with a modern cut."),
-        Product("p2", "Everyday Hoodie", "c1", 5499, "Warm, minimal hoodie for daily wear."),
-        Product("p3", "Wireless Earbuds", "c2", 7999, "Compact earbuds with crisp sound."),
-        Product("p4", "Desk Lamp", "c3", 3299, "Warm light, clean silhouette, subtle glow."),
-        Product("p5", "Ceramic Mug", "c3", 1599, "Matte white mug — simple and timeless."),
-        Product("p6", "USB‑C Cable", "c2", 1299, "Durable braided cable for fast charging.")
+        Product(
+            id = "p1",
+            name = "Ocean Tee",
+            categoryId = "c1",
+            priceCents = 2499,
+            description = "Soft cotton tee with a modern cut.",
+            imageUrls = listOf("mock://ocean-tee/1", "mock://ocean-tee/2", "mock://ocean-tee/3"),
+            longDescription = "A refined everyday tee with a clean silhouette and soft hand-feel. Designed to layer easily or stand on its own.",
+            bulletPoints = listOf(
+                "100% cotton feel (mock)",
+                "Modern fit with comfortable stretch (mock)",
+                "Easy-care fabric (mock)"
+            ),
+            isOnSale = true,
+            salePriceCents = 1999,
+            discountPercent = null
+        ),
+        Product(
+            id = "p2",
+            name = "Everyday Hoodie",
+            categoryId = "c1",
+            priceCents = 5499,
+            description = "Warm, minimal hoodie for daily wear.",
+            imageUrls = listOf("mock://hoodie/1", "mock://hoodie/2"),
+            longDescription = "A cozy hoodie built for repeat wear. Minimal branding, structured drape, and a soft interior for comfort.",
+            bulletPoints = listOf(
+                "Brushed interior for warmth (mock)",
+                "Reinforced seams (mock)",
+                "Roomy hood + clean drawcords (mock)"
+            ),
+            isOnSale = false
+        ),
+        Product(
+            id = "p3",
+            name = "Wireless Earbuds",
+            categoryId = "c2",
+            priceCents = 7999,
+            description = "Compact earbuds with crisp sound.",
+            imageUrls = listOf("mock://earbuds/1", "mock://earbuds/2", "mock://earbuds/3"),
+            longDescription = "Pocket-ready wireless earbuds with clear audio and a stable fit. Built for commute calls and focused listening.",
+            bulletPoints = listOf(
+                "Charging case included (mock)",
+                "Touch controls (mock)",
+                "Noise isolation tips (mock)"
+            ),
+            isOnSale = true,
+            salePriceCents = 6499,
+            discountPercent = 19
+        ),
+        Product(
+            id = "p4",
+            name = "Desk Lamp",
+            categoryId = "c3",
+            priceCents = 3299,
+            description = "Warm light, clean silhouette, subtle glow.",
+            imageUrls = listOf("mock://lamp/1"),
+            longDescription = "A compact desk lamp with warm ambient light. Fits small spaces and keeps your setup feeling calm and professional.",
+            bulletPoints = listOf(
+                "Warm color temperature (mock)",
+                "Stable base (mock)",
+                "Minimal footprint (mock)"
+            ),
+            isOnSale = false
+        ),
+        Product(
+            id = "p5",
+            name = "Ceramic Mug",
+            categoryId = "c3",
+            priceCents = 1599,
+            description = "Matte white mug — simple and timeless.",
+            imageUrls = listOf("mock://mug/1", "mock://mug/2"),
+            longDescription = "A clean, matte mug that feels right at home on any desk. Comfortable handle, balanced weight, and a timeless look.",
+            bulletPoints = listOf(
+                "Ceramic body (mock)",
+                "Comfort-grip handle (mock)",
+                "Everyday capacity (mock)"
+            ),
+            isOnSale = true,
+            salePriceCents = 1299,
+            discountPercent = null
+        ),
+        Product(
+            id = "p6",
+            name = "USB‑C Cable",
+            categoryId = "c2",
+            priceCents = 1299,
+            description = "Durable braided cable for fast charging.",
+            imageUrls = emptyList(), // Demonstrates placeholder behavior when URLs are absent.
+            longDescription = "A durable braided cable designed for daily use. Reliable charging and data transfer in a clean, understated finish.",
+            bulletPoints = listOf(
+                "Braided outer layer (mock)",
+                "Reinforced connector (mock)",
+                "Fast charge support (mock)"
+            ),
+            isOnSale = false
+        )
     )
 
     // productId -> quantity

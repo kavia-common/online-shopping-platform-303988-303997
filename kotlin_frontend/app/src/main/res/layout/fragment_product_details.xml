@@ -22,13 +22,46 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <!-- Large image placeholder (mock) -->
-            <View
-                android:id="@+id/product_image_large"
+            <!-- Media gallery (mock): horizontally swipeable placeholders. -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_gallery"
                 android:layout_width="match_parent"
                 android:layout_height="180dp"
-                android:background="@drawable/bg_chip_outline"
-                android:contentDescription="@string/title_product_details" />
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:scrollbars="none"
+                android:contentDescription="@string/cd_product_gallery" />
+
+            <!-- Indicators (shown when imageUrls.size > 1). -->
+            <LinearLayout
+                android:id="@+id/gallery_dots"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <View
+                    android:id="@+id/dot_1"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:background="@drawable/bg_pager_dot_selected" />
+
+                <View
+                    android:id="@+id/dot_2"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_pager_dot" />
+
+                <View
+                    android:id="@+id/dot_3"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_pager_dot" />
+            </LinearLayout>
 
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:id="@+id/title_row"
@@ -67,13 +100,52 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
+            <!-- Sale badge + pricing -->
             <TextView
-                android:id="@+id/tv_price"
-                style="@style/TextAppearance.Ocean.Price"
+                android:id="@+id/tv_sale_badge"
+                style="@style/TextAppearance.Ocean.Badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_sale_badge"
+                android:text="@string/sale_badge"
+                android:visibility="gone"
+                android:contentDescription="@string/cd_sale_badge" />
+
+            <LinearLayout
+                android:id="@+id/price_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp" />
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
+                <TextView
+                    android:id="@+id/tv_sale_price"
+                    style="@style/TextAppearance.Ocean.Price"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="$0.00"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tv_price"
+                    style="@style/TextAppearance.Ocean.Price"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="$0.00" />
+
+                <TextView
+                    android:id="@+id/tv_original_price"
+                    style="@style/TextAppearance.Ocean.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="$0.00"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Rich description -->
             <TextView
                 android:id="@+id/tv_description"
                 style="@style/TextAppearance.Ocean.Body"
@@ -81,6 +153,26 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:lineSpacingExtra="2dp" />
+
+            <!-- Specs / bullet points -->
+            <TextView
+                android:id="@+id/tv_specs_title"
+                style="@style/TextAppearance.Ocean.Subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/specs_title"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_specs"
+                style="@style/TextAppearance.Ocean.Muted"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="2dp"
+                android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_add_to_cart"

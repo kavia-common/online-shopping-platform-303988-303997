@@ -14,9 +14,38 @@
         android:layout_width="64dp"
         android:layout_height="64dp"
         android:background="@drawable/bg_chip_outline"
-        android:contentDescription="@string/title_product_details"
+        android:contentDescription="@string/cd_product_image"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Subtle multi-image indicator row (shown only when imageUrls.size > 1). -->
+    <LinearLayout
+        android:id="@+id/image_dots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/product_image_placeholder"
+        app:layout_constraintStart_toStartOf="@id/product_image_placeholder">
+
+        <View
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:background="@drawable/bg_pager_dot_selected" />
+
+        <View
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_pager_dot" />
+
+        <View
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_pager_dot" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tv_name"
@@ -43,6 +72,25 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Sale badge (shown only when isOnSale is true). -->
+    <TextView
+        android:id="@+id/tv_sale_badge"
+        style="@style/TextAppearance.Ocean.Badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_sale_badge"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:text="@string/sale_badge"
+        android:visibility="gone"
+        android:contentDescription="@string/cd_sale_badge"
+        app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
+        app:layout_constraintTop_toBottomOf="@id/tv_meta" />
+
     <TextView
         android:id="@+id/tv_meta"
         style="@style/TextAppearance.Ocean.Caption"
@@ -54,14 +102,42 @@
         app:layout_constraintTop_toBottomOf="@id/tv_name"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <TextView
-        android:id="@+id/tv_price"
-        style="@style/TextAppearance.Ocean.Price"
-        android:layout_width="wrap_content"
+    <!-- Price row: supports sale price + strike-through original. -->
+    <LinearLayout
+        android:id="@+id/price_row"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
-        app:layout_constraintTop_toBottomOf="@id/tv_meta" />
+        app:layout_constraintTop_toBottomOf="@id/tv_sale_badge"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/tv_sale_price"
+            style="@style/TextAppearance.Ocean.Price"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:text="$0.00" />
+
+        <TextView
+            android:id="@+id/tv_price"
+            style="@style/TextAppearance.Ocean.Price"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="$0.00" />
+
+        <TextView
+            android:id="@+id/tv_original_price"
+            style="@style/TextAppearance.Ocean.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="$0.00"
+            android:visibility="gone" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

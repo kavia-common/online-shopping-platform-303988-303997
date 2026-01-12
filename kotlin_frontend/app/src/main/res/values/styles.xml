@@ -121,4 +121,11 @@
         <item name="android:textSize">16sp</item>
     </style>
 
+    <style name="TextAppearance.Ocean.Badge" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textColor">@color/ocean_on_secondary</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
 </resources>

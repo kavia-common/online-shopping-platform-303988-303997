@@ -145,6 +145,16 @@
                     android:visibility="gone" />
             </LinearLayout>
 
+            <!-- Countdown (details): shown only when limited-time sale is active. -->
+            <TextView
+                android:id="@+id/tv_sale_countdown"
+                style="@style/TextAppearance.Ocean.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/ocean_muted_text"
+                android:visibility="gone" />
+
             <!-- Rich description -->
             <TextView
                 android:id="@+id/tv_description"

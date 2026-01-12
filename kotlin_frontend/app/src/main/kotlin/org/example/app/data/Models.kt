@@ -47,7 +47,14 @@ data class Product(
      * Optional discount percent (e.g. 20 means "20% off").
      * If null, UI may compute a derived value from [priceCents] and [salePriceCents].
      */
-    val discountPercent: Int? = null
+    val discountPercent: Int? = null,
+    /**
+     * Optional sale end time (epoch millis). When present and in the future, UI may show an
+     * "Ends in ..." countdown for limited-time offers.
+     *
+     * Null means: no countdown / no end time known.
+     */
+    val saleEndEpochMillis: Long? = null
 ) {
     fun formattedPrice(): String = "$" + String.format("%.2f", priceCents / 100.0)
 
@@ -74,5 +81,16 @@ data class Product(
         val sale = effectiveSalePriceCents() ?: return null
         val pct = (((priceCents - sale) * 100.0) / priceCents).toInt()
         return pct.coerceIn(1, 99)
+    }
+
+    fun hasSaleCountdown(nowEpochMillis: Long = System.currentTimeMillis()): Boolean {
+        val end = saleEndEpochMillis ?: return false
+        return isOnSale && effectiveSalePriceCents() != null && end > nowEpochMillis
+    }
+
+    fun remainingSaleMillis(nowEpochMillis: Long = System.currentTimeMillis()): Long? {
+        val end = saleEndEpochMillis ?: return null
+        if (!hasSaleCountdown(nowEpochMillis)) return null
+        return (end - nowEpochMillis).coerceAtLeast(0L)
     }
 }

@@ -1,24 +1,35 @@
 package org.example.app.ui.product
 
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Paint
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.example.app.R
 import org.example.app.data.Product
 import org.example.app.data.ShopRepository
+import org.example.app.ui.util.SaleCountdownFormatter
 
 class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
 
     private var productId: String? = null
+
+    private var countdownJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +52,7 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
         val tvSalePrice = view.findViewById<TextView>(R.id.tv_sale_price)
         val tvPrice = view.findViewById<TextView>(R.id.tv_price)
         val tvOriginalPrice = view.findViewById<TextView>(R.id.tv_original_price)
+        val tvSaleCountdown = view.findViewById<TextView>(R.id.tv_sale_countdown)
 
         val tvDescription = view.findViewById<TextView>(R.id.tv_description)
         val tvSpecsTitle = view.findViewById<TextView>(R.id.tv_specs_title)
@@ -87,6 +99,9 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
             tvSpecs.visibility = View.GONE
             btnAddToCart.isEnabled = false
             btnFavorite.isEnabled = false
+            tvSaleBadge.visibility = View.GONE
+            tvSalePrice.visibility = View.GONE
+            tvSaleCountdown.visibility = View.GONE
 
             // Gallery placeholder: show a single "image" even when product is missing.
             galleryAdapter.submit(listOf("mock://missing/1"))
@@ -100,6 +115,7 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
                 tvSalePrice = tvSalePrice,
                 tvPrice = tvPrice,
                 tvOriginalPrice = tvOriginalPrice,
+                tvSaleCountdown = tvSaleCountdown,
                 tvDescription = tvDescription,
                 tvSpecsTitle = tvSpecsTitle,
                 tvSpecs = tvSpecs,
@@ -123,11 +139,25 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
             }
             // Initial state
             updateFavoriteUi(btnFavorite, p)
+
+            // Start/stop countdown updates automatically with view lifecycle.
+            startCountdownIfNeeded(p, tvSaleCountdown)
         }
 
         btnGoToCart.setOnClickListener {
             findNavController().navigate(R.id.action_productDetails_to_cart)
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Ensure countdown doesn't keep running while screen is not active.
+        stopCountdown()
+    }
+
+    override fun onDestroyView() {
+        stopCountdown()
+        super.onDestroyView()
     }
 
     private fun bindProduct(
@@ -138,6 +168,7 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
         tvSalePrice: TextView,
         tvPrice: TextView,
         tvOriginalPrice: TextView,
+        tvSaleCountdown: TextView,
         tvDescription: TextView,
         tvSpecsTitle: TextView,
         tvSpecs: TextView,
@@ -184,6 +215,36 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
 
             tvOriginalPrice.visibility = View.GONE
 
+            // Subtle animations for badge + sale price (first render only), respects reduced motion.
+            if (!isReducedMotionEnabled(context)) {
+                tvSaleBadge.alpha = 0f
+                tvSaleBadge.scaleX = 0.92f
+                tvSaleBadge.scaleY = 0.92f
+                tvSaleBadge.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(160L)
+                    .start()
+
+                tvSalePrice.scaleX = 1f
+                tvSalePrice.scaleY = 1f
+                tvSalePrice.animate()
+                    .scaleX(1.04f)
+                    .scaleY(1.04f)
+                    .setDuration(140L)
+                    .withEndAction {
+                        tvSalePrice.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+                    }
+                    .start()
+            } else {
+                tvSaleBadge.alpha = 1f
+                tvSaleBadge.scaleX = 1f
+                tvSaleBadge.scaleY = 1f
+                tvSalePrice.scaleX = 1f
+                tvSalePrice.scaleY = 1f
+            }
+
             // Accessibility: announce sale semantics clearly.
             tvPrice.contentDescription = context.getString(
                 R.string.cd_price_on_sale,
@@ -193,6 +254,7 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
         } else {
             tvSaleBadge.visibility = View.GONE
             tvSalePrice.visibility = View.GONE
+            tvSaleCountdown.visibility = View.GONE
 
             tvPrice.text = p.formattedPrice()
             tvPrice.paintFlags = tvPrice.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
@@ -216,6 +278,53 @@ class ProductDetailsFragment : Fragment(R.layout.fragment_product_details) {
             tvSpecs.visibility = View.VISIBLE
             tvSpecs.text = bullets.joinToString(separator = "\n") { "• $it" }
             tvSpecs.contentDescription = context.getString(R.string.cd_product_specs)
+        }
+    }
+
+    private fun startCountdownIfNeeded(product: Product, tvSaleCountdown: TextView) {
+        stopCountdown()
+
+        if (!product.hasSaleCountdown()) {
+            tvSaleCountdown.visibility = View.GONE
+            tvSaleCountdown.text = ""
+            tvSaleCountdown.contentDescription = null
+            return
+        }
+
+        countdownJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (isActive) {
+                val remaining = product.remainingSaleMillis() ?: 0L
+                if (remaining <= 0L) {
+                    tvSaleCountdown.visibility = View.GONE
+                    tvSaleCountdown.text = ""
+                    tvSaleCountdown.contentDescription = null
+                    break
+                }
+
+                val formatted = SaleCountdownFormatter.formatRemaining(remaining)
+                tvSaleCountdown.visibility = View.VISIBLE
+                tvSaleCountdown.text = tvSaleCountdown.context.getString(R.string.sale_ends_in, formatted)
+                tvSaleCountdown.contentDescription = tvSaleCountdown.context.getString(R.string.cd_sale_ends_in, formatted)
+
+                // Coalesced coroutine timer; lifecycleScope cancels on destroy, and we also stop onPause.
+                delay(1000L)
+            }
+        }
+    }
+
+    private fun stopCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
+    }
+
+    private fun isReducedMotionEnabled(context: Context): Boolean {
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        if (am?.isEnabled == true && am.isTouchExplorationEnabled) return true
+
+        return try {
+            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        } catch (_: Throwable) {
+            false
         }
     }
 

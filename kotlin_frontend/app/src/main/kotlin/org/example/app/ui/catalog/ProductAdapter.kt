@@ -1,10 +1,15 @@
 package org.example.app.ui.catalog
 
+import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.graphics.Paint
+import android.view.accessibility.AccessibilityManager
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -14,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.example.app.R
 import org.example.app.data.Product
 import org.example.app.data.ShopRepository
+import org.example.app.ui.util.SaleCountdownFormatter
 
 class ProductAdapter(
     private val onClick: (Product) -> Unit
@@ -23,6 +29,11 @@ class ProductAdapter(
     private var repo: ShopRepository? = null
 
     private var showLoadingFooter: Boolean = false
+
+    // Shared, lifecycle-aware ticker for countdowns in visible rows.
+    // We start it when RecyclerView attaches and stop when it detaches.
+    private val countdownHandler = Handler(Looper.getMainLooper())
+    private var countdownRunnable: Runnable? = null
 
     init {
         setHasStableIds(true)
@@ -157,12 +168,32 @@ class ProductAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
-        if (holder is ProductVH && payloads.contains(PAYLOAD_FAVORITE_CHANGED)) {
-            val product = items[position]
-            holder.bindFavorite(product, repo)
-            return
+        if (holder is ProductVH) {
+            if (payloads.contains(PAYLOAD_FAVORITE_CHANGED)) {
+                val product = items[position]
+                holder.bindFavorite(product, repo)
+                return
+            }
+            if (payloads.contains(PAYLOAD_COUNTDOWN_TICK)) {
+                // Only update countdown text to keep per-second work minimal.
+                if (position < items.size) {
+                    val product = items[position]
+                    holder.bindCountdownTick(product)
+                }
+                return
+            }
         }
         super.onBindViewHolder(holder, position, payloads)
+    }
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        startCountdownTicker()
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        stopCountdownTicker()
+        super.onDetachedFromRecyclerView(recyclerView)
     }
 
     override fun getItemCount(): Int = items.size + if (showLoadingFooter) 1 else 0
@@ -175,6 +206,40 @@ class ProductAdapter(
         }
     }
 
+    private fun startCountdownTicker() {
+        if (countdownRunnable != null) return
+        val r = object : Runnable {
+            override fun run() {
+                // Update only visible product rows (skip footer).
+                // notifyItemRangeChanged with payload lets VH update only countdown text.
+                if (items.isNotEmpty()) {
+                    notifyItemRangeChanged(0, items.size, PAYLOAD_COUNTDOWN_TICK)
+                }
+                countdownHandler.postDelayed(this, 1000L)
+            }
+        }
+        countdownRunnable = r
+        countdownHandler.post(r)
+    }
+
+    private fun stopCountdownTicker() {
+        countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+        countdownRunnable = null
+    }
+
+    private fun isReducedMotionEnabled(context: Context): Boolean {
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        // Prefer Android's accessibility hint when available.
+        if (am?.isEnabled == true && am.isTouchExplorationEnabled) return true
+
+        // Also respect the "remove animations" global setting.
+        return try {
+            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     class ProductVH(
         itemView: View,
         private val onClick: (Product) -> Unit
@@ -184,6 +249,7 @@ class ProductAdapter(
         private val tvMeta: TextView = itemView.findViewById(R.id.tv_meta)
 
         private val tvSaleBadge: TextView = itemView.findViewById(R.id.tv_sale_badge)
+        private val tvSaleCountdown: TextView = itemView.findViewById(R.id.tv_sale_countdown)
         private val tvSalePrice: TextView = itemView.findViewById(R.id.tv_sale_price)
         private val tvPrice: TextView = itemView.findViewById(R.id.tv_price)
         private val tvOriginalPrice: TextView = itemView.findViewById(R.id.tv_original_price)
@@ -192,11 +258,25 @@ class ProductAdapter(
 
         private val btnFavorite: ImageButton = itemView.findViewById(R.id.btn_favorite)
 
+        private var hasAnimatedSaleBadge: Boolean = false
+        private var hasAnimatedSalePrice: Boolean = false
+
+        private fun isReducedMotionEnabled(context: Context): Boolean {
+            val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+            if (am?.isEnabled == true && am.isTouchExplorationEnabled) return true
+
+            return try {
+                Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
         fun bind(product: Product, repo: ShopRepository?) {
             tvName.text = product.name
             tvMeta.text = repo?.getCategoryName(product.categoryId) ?: ""
 
-            bindSaleUi(product)
+            bindSaleUi(product, animateOnFirstBind = true)
 
             // Multi-image hint: we do not load images; this is a subtle indicator that more media exists.
             val showDots = product.hasMultipleImages()
@@ -220,7 +300,12 @@ class ProductAdapter(
             }
         }
 
-        private fun bindSaleUi(product: Product) {
+        fun bindCountdownTick(product: Product) {
+            // No animations on tick updates.
+            bindSaleCountdownOnly(product)
+        }
+
+        private fun bindSaleUi(product: Product, animateOnFirstBind: Boolean) {
             val context = itemView.context
 
             val saleCents = product.effectiveSalePriceCents()
@@ -235,8 +320,29 @@ class ProductAdapter(
                     context.getString(R.string.sale_badge)
                 }
                 tvSaleBadge.visibility = View.VISIBLE
+
+                // Subtle badge appearance animation (fade+scale), respects reduced motion.
+                if (animateOnFirstBind && !hasAnimatedSaleBadge && !isReducedMotionEnabled(context)) {
+                    hasAnimatedSaleBadge = true
+                    tvSaleBadge.alpha = 0f
+                    tvSaleBadge.scaleX = 0.92f
+                    tvSaleBadge.scaleY = 0.92f
+                    tvSaleBadge.animate()
+                        .alpha(1f)
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(160L)
+                        .start()
+                } else {
+                    tvSaleBadge.alpha = 1f
+                    tvSaleBadge.scaleX = 1f
+                    tvSaleBadge.scaleY = 1f
+                }
             } else {
                 tvSaleBadge.visibility = View.GONE
+                tvSaleCountdown.visibility = View.GONE
+                hasAnimatedSaleBadge = false
+                hasAnimatedSalePrice = false
             }
 
             // Prices
@@ -249,6 +355,24 @@ class ProductAdapter(
                 tvPrice.setTextColor(context.getColor(R.color.ocean_muted_text))
 
                 tvOriginalPrice.visibility = View.GONE
+
+                // Small pulse emphasis for sale price on first render, respects reduced motion.
+                if (animateOnFirstBind && !hasAnimatedSalePrice && !isReducedMotionEnabled(context)) {
+                    hasAnimatedSalePrice = true
+                    tvSalePrice.scaleX = 1f
+                    tvSalePrice.scaleY = 1f
+                    tvSalePrice.animate()
+                        .scaleX(1.04f)
+                        .scaleY(1.04f)
+                        .setDuration(140L)
+                        .withEndAction {
+                            tvSalePrice.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+                        }
+                        .start()
+                } else {
+                    tvSalePrice.scaleX = 1f
+                    tvSalePrice.scaleY = 1f
+                }
             } else {
                 tvSalePrice.visibility = View.GONE
 
@@ -259,6 +383,8 @@ class ProductAdapter(
                 tvOriginalPrice.visibility = View.GONE
             }
 
+            bindSaleCountdownOnly(product)
+
             // Accessibility: make sure screen readers read the effective price meaningfully.
             tvPrice.contentDescription = if (isOnSale) {
                 context.getString(
@@ -268,6 +394,29 @@ class ProductAdapter(
                 )
             } else {
                 context.getString(R.string.cd_price_regular, tvPrice.text)
+            }
+        }
+
+        private fun bindSaleCountdownOnly(product: Product) {
+            val context = itemView.context
+            val remaining = product.remainingSaleMillis()
+            val showCountdown = remaining != null && remaining > 0L
+
+            if (showCountdown) {
+                // Compact countdown in catalog; keep it subtle to avoid layout jumps.
+                tvSaleCountdown.visibility = View.VISIBLE
+                tvSaleCountdown.text = context.getString(
+                    R.string.sale_ends_in_compact,
+                    SaleCountdownFormatter.formatRemaining(remaining)
+                )
+                tvSaleCountdown.contentDescription = context.getString(
+                    R.string.cd_sale_ends_in,
+                    SaleCountdownFormatter.formatRemaining(remaining)
+                )
+            } else {
+                tvSaleCountdown.visibility = View.GONE
+                tvSaleCountdown.text = ""
+                tvSaleCountdown.contentDescription = null
             }
         }
 
@@ -305,6 +454,7 @@ class ProductAdapter(
 
     private companion object {
         private const val PAYLOAD_FAVORITE_CHANGED = "payload_favorite_changed"
+        private const val PAYLOAD_COUNTDOWN_TICK = "payload_countdown_tick"
 
         private const val TYPE_PRODUCT = 1
         private const val TYPE_LOADING = 2

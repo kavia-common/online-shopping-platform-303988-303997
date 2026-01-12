@@ -54,6 +54,8 @@
     <!-- Product media + sale -->
     <string name="sale_badge">SALE</string>
     <string name="sale_badge_percent">%1$d%% OFF</string>
+    <string name="sale_ends_in">Ends in %1$s</string>
+    <string name="sale_ends_in_compact">Ends in %1$s</string>
     <string name="specs_title">Specs</string>
     <string name="product_not_found">Product not found</string>
 
@@ -64,6 +66,7 @@
     <string name="cd_multiple_images">%1$d product images available</string>
     <string name="cd_gallery_dots">Gallery position indicators</string>
     <string name="cd_sale_badge">Sale item</string>
+    <string name="cd_sale_ends_in">Sale ends in %1$s</string>
     <string name="cd_price_on_sale">On sale: %1$s. Original price: %2$s.</string>
     <string name="cd_price_regular">Price: %1$s.</string>
     <string name="cd_product_specs">Product specifications</string>

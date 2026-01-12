@@ -40,7 +40,8 @@ object ShopRepository {
             ),
             isOnSale = true,
             salePriceCents = 1999,
-            discountPercent = null
+            discountPercent = null,
+            saleEndEpochMillis = System.currentTimeMillis() + 2L * 60L * 60L * 1000L // 2 hours from now (mock)
         ),
         Product(
             id = "p2",

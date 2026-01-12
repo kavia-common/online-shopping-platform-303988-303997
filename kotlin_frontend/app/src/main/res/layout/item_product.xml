@@ -8,15 +8,39 @@
     android:minHeight="72dp"
     android:padding="16dp">
 
-    <!-- Placeholder image; kept as View for mock data UI. -->
-    <View
-        android:id="@+id/product_image_placeholder"
+    <!-- Image area wrapper so sale badge can align consistently within the image bounds. -->
+    <FrameLayout
+        android:id="@+id/image_area"
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:background="@drawable/bg_chip_outline"
-        android:contentDescription="@string/cd_product_image"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Placeholder image; kept as View for mock data UI. -->
+        <View
+            android:id="@+id/product_image_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_chip_outline"
+            android:contentDescription="@string/cd_product_image" />
+
+        <!-- Sale badge (shown only when isOnSale is true). Overlayed within the image area. -->
+        <TextView
+            android:id="@+id/tv_sale_badge"
+            style="@style/TextAppearance.Ocean.Badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_sale_badge"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:text="@string/sale_badge"
+            android:visibility="gone"
+            android:contentDescription="@string/cd_sale_badge" />
+    </FrameLayout>
 
     <!-- Subtle multi-image indicator row (shown only when imageUrls.size > 1). -->
     <LinearLayout
@@ -26,8 +50,8 @@
         android:layout_marginTop="6dp"
         android:orientation="horizontal"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/product_image_placeholder"
-        app:layout_constraintStart_toStartOf="@id/product_image_placeholder">
+        app:layout_constraintTop_toBottomOf="@id/image_area"
+        app:layout_constraintStart_toStartOf="@id/image_area">
 
         <View
             android:layout_width="6dp"
@@ -56,8 +80,8 @@
         android:layout_marginEnd="8dp"
         android:ellipsize="end"
         android:maxLines="2"
-        app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
-        app:layout_constraintTop_toTopOf="@id/product_image_placeholder"
+        app:layout_constraintStart_toEndOf="@id/image_area"
+        app:layout_constraintTop_toTopOf="@id/image_area"
         app:layout_constraintEnd_toStartOf="@id/btn_favorite" />
 
     <ImageButton
@@ -72,25 +96,6 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Sale badge (shown only when isOnSale is true). -->
-    <TextView
-        android:id="@+id/tv_sale_badge"
-        style="@style/TextAppearance.Ocean.Badge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/bg_sale_badge"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:text="@string/sale_badge"
-        android:visibility="gone"
-        android:contentDescription="@string/cd_sale_badge"
-        app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
-        app:layout_constraintTop_toBottomOf="@id/tv_meta" />
-
     <TextView
         android:id="@+id/tv_meta"
         style="@style/TextAppearance.Ocean.Caption"
@@ -98,7 +103,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_marginTop="4dp"
-        app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
+        app:layout_constraintStart_toEndOf="@id/image_area"
         app:layout_constraintTop_toBottomOf="@id/tv_name"
         app:layout_constraintEnd_toEndOf="parent" />
 
@@ -111,8 +116,8 @@
         android:layout_marginTop="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        app:layout_constraintStart_toEndOf="@id/product_image_placeholder"
-        app:layout_constraintTop_toBottomOf="@id/tv_sale_badge"
+        app:layout_constraintStart_toEndOf="@id/image_area"
+        app:layout_constraintTop_toBottomOf="@id/tv_meta"
         app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
@@ -139,5 +144,21 @@
             android:text="$0.00"
             android:visibility="gone" />
     </LinearLayout>
+
+    <!-- Compact countdown (catalog). Shown only when limited-time sale is active. -->
+    <TextView
+        android:id="@+id/tv_sale_countdown"
+        style="@style/TextAppearance.Ocean.Caption"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/ocean_muted_text"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/image_area"
+        app:layout_constraintTop_toBottomOf="@id/price_row"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

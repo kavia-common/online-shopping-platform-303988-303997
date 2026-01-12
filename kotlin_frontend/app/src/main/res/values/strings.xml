@@ -14,7 +14,17 @@
     <string name="filters_title">Filters</string>
     <string name="filter_category">Category</string>
     <string name="filter_price">Price</string>
+    <string name="filter_sort">Sort</string>
     <string name="search_hint">Search products</string>
+
+    <string name="category_all">All</string>
+
+    <string name="sort_relevance">Relevance</string>
+    <string name="sort_price_low_to_high">Price: Low to High</string>
+    <string name="sort_price_high_to_low">Price: High to Low</string>
+    <string name="sort_name_a_to_z">Name: A–Z</string>
+
+    <string name="catalog_empty_results">No products match your search.</string>
 
     <string name="add_to_cart">Add to Cart</string>
     <string name="go_to_cart">Go to Cart</string>

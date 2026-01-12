@@ -61,6 +61,19 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:text="@string/filter_sort" />
+
+        <Spinner
+            android:id="@+id/spinner_sort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            style="@style/TextAppearance.Ocean.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="@string/filter_price" />
 
         <TextView
@@ -80,6 +93,20 @@
             android:text="@string/go_to_cart" />
 
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_empty_results"
+        style="@style/TextAppearance.Ocean.Muted"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:background="@drawable/bg_surface_rounded"
+        android:padding="16dp"
+        android:text="@string/catalog_empty_results"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/filters_panel"
+        app:layout_constraintStart_toEndOf="@id/filters_panel"
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_products"

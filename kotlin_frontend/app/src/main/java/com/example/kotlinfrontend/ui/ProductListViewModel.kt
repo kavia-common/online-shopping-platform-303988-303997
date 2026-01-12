@@ -102,6 +102,26 @@ class ProductListViewModel : ViewModel() {
         _filter.value = ProductFilter()
     }
 
+    // PUBLIC_INTERFACE
+    fun setFilter(filter: ProductFilter) {
+        /** Replace the entire filter object in one update (useful when applying presets). */
+        _filter.value = filter
+    }
+
+    // PUBLIC_INTERFACE
+    fun clearAll() {
+        /** Clear both query and filters (used by "Clear all"). */
+        _searchQuery.value = ""
+        _filter.value = ProductFilter()
+    }
+
+    // PUBLIC_INTERFACE
+    fun applyPreset(query: String, filter: ProductFilter) {
+        /** Apply a saved preset (query + filters) as one action. */
+        _searchQuery.value = query
+        _filter.value = filter
+    }
+
     data class QueryParams(
         val query: String,
         val filter: ProductFilter

@@ -4,7 +4,9 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.ArrayAdapter
+import android.widget.EditText
 import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
@@ -12,7 +14,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.kotlinfrontend.data.FilterPresetStore
 import com.example.kotlinfrontend.databinding.ActivityProductListBinding
+import com.example.kotlinfrontend.model.FilterPreset
+import com.example.kotlinfrontend.model.ProductFilter
+import com.google.android.material.chip.Chip
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -22,10 +30,19 @@ class ProductListActivity : ComponentActivity() {
 
     private lateinit var viewModel: ProductListViewModel
 
+    // Backing store for preset CRUD
+    private lateinit var presetStore: FilterPresetStore
+
+    // We need these for syncing UI <-> state when applying presets
+    private val categories = listOf("All", "Electronics", "Clothing", "Home", "Books")
+
+    private var suppressUiCallbacks = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         viewModel = ViewModelProvider(this)[ProductListViewModel::class.java]
+        presetStore = FilterPresetStore(this)
 
         binding = ActivityProductListBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -37,6 +54,7 @@ class ProductListActivity : ComponentActivity() {
         binding.recyclerView.adapter = productAdapter.withLoadStateFooter(footer)
 
         setupSearchAndFilters(productAdapter)
+        setupPresetsAndClearAll(productAdapter)
 
         // Pull-to-refresh triggers a paging refresh (re-runs current query+filters; doesn't over-fetch).
         binding.swipeRefresh.setOnRefreshListener {
@@ -56,11 +74,18 @@ class ProductListActivity : ComponentActivity() {
             }
         }
 
-        // Keep empty-state messaging tied to active search/filter inputs
+        // Keep empty-state messaging tied to active search/filter inputs + render active chips
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.activeQueryParams.collectLatest { params ->
                     updateEmptyStateText(query = params.query, hasActiveFilters = params.filter.isActive())
+                    renderActiveFilterChips(
+                        query = params.query,
+                        filter = params.filter,
+                        onStateChanged = { productAdapter.refresh() }
+                    )
+                    // If preset applied programmatically, also ensure controls reflect current state.
+                    syncFilterControlsToState(query = params.query, filter = params.filter)
                 }
             }
         }
@@ -109,6 +134,54 @@ class ProductListActivity : ComponentActivity() {
         }
     }
 
+    private fun setupPresetsAndClearAll(productAdapter: ProductAdapter) {
+        binding.clearAllButton.setOnClickListener {
+            // One action to reset everything.
+            suppressUiCallbacks = true
+            try {
+                viewModel.clearAll()
+                // UI controls will be synced via collector
+            } finally {
+                suppressUiCallbacks = false
+            }
+            productAdapter.refresh()
+        }
+
+        binding.savePresetButton.setOnClickListener {
+            showSavePresetDialog(
+                onSave = { presetName ->
+                    val params = viewModel.activeQueryParams.value
+                    val preset = FilterPreset(
+                        name = presetName,
+                        query = params.query,
+                        filter = params.filter
+                    )
+                    presetStore.upsert(preset)
+                    Snackbar.make(binding.root, "Preset saved.", Snackbar.LENGTH_SHORT).show()
+                }
+            )
+        }
+
+        binding.presetsButton.setOnClickListener {
+            showPresetsDialog(
+                onApply = { preset ->
+                    suppressUiCallbacks = true
+                    try {
+                        viewModel.applyPreset(query = preset.query, filter = preset.filter)
+                        // UI controls will be synced via collector
+                    } finally {
+                        suppressUiCallbacks = false
+                    }
+                    productAdapter.refresh()
+                },
+                onDelete = { preset ->
+                    presetStore.deleteByName(preset.name)
+                    Snackbar.make(binding.root, "Preset deleted.", Snackbar.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
     private fun setupSearchAndFilters(productAdapter: ProductAdapter) {
         // Search input -> ViewModel state (debounced inside VM)
         binding.searchEditText.addTextChangedListener(object : TextWatcher {
@@ -116,6 +189,7 @@ class ProductListActivity : ComponentActivity() {
             override fun afterTextChanged(s: Editable?) = Unit
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (suppressUiCallbacks) return
                 viewModel.setSearchQuery(s?.toString().orEmpty())
                 // Pager is recreated via flows; we still explicitly refresh so list updates promptly
                 // and SwipeRefreshLayout/LoadState reflect the new query.
@@ -124,7 +198,6 @@ class ProductListActivity : ComponentActivity() {
         })
 
         // Category spinner
-        val categories = listOf("All", "Electronics", "Clothing", "Home", "Books")
         val spinnerAdapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
@@ -133,6 +206,7 @@ class ProductListActivity : ComponentActivity() {
         binding.categorySpinner.adapter = spinnerAdapter
         binding.categorySpinner.setSelection(0)
         binding.categorySpinner.setOnItemSelectedListener { _, _, position, _ ->
+            if (suppressUiCallbacks) return@setOnItemSelectedListener
             val selected = categories[position]
             viewModel.setCategory(if (selected == "All") null else selected)
             productAdapter.refresh()
@@ -140,6 +214,7 @@ class ProductListActivity : ComponentActivity() {
 
         // Price chips (simple preset ranges)
         binding.priceChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (suppressUiCallbacks) return@setOnCheckedStateChangeListener
             val checkedId = checkedIds.firstOrNull()
             when (checkedId) {
                 binding.chipUnder25.id -> {
@@ -164,6 +239,174 @@ class ProductListActivity : ComponentActivity() {
         }
     }
 
+    private fun syncFilterControlsToState(query: String, filter: ProductFilter) {
+        // Keep UI consistent with state (especially when applying presets).
+        if (!suppressUiCallbacks) return
+
+        // Search
+        val current = binding.searchEditText.text?.toString().orEmpty()
+        if (current != query) {
+            binding.searchEditText.setText(query)
+            binding.searchEditText.setSelection(query.length)
+        }
+
+        // Category spinner
+        val spinnerPos = when (filter.category) {
+            null -> 0
+            else -> categories.indexOfFirst { it == filter.category }.let { if (it >= 0) it else 0 }
+        }
+        if (binding.categorySpinner.selectedItemPosition != spinnerPos) {
+            binding.categorySpinner.setSelection(spinnerPos)
+        }
+
+        // Price chips (map filter min/max into the 3 known options; otherwise clear selection)
+        val targetChipId = when {
+            filter.minPriceCents == null && filter.maxPriceCents == 2500 -> binding.chipUnder25.id
+            filter.minPriceCents == 2500 && filter.maxPriceCents == 4000 -> binding.chip25to40.id
+            filter.minPriceCents == 4000 && filter.maxPriceCents == null -> binding.chipOver40.id
+            else -> ViewIds.NO_ID
+        }
+        if (targetChipId == ViewIds.NO_ID) {
+            binding.priceChipGroup.clearCheck()
+        } else if (binding.priceChipGroup.checkedChipId != targetChipId) {
+            binding.priceChipGroup.check(targetChipId)
+        }
+    }
+
+    private fun renderActiveFilterChips(
+        query: String,
+        filter: ProductFilter,
+        onStateChanged: () -> Unit
+    ) {
+        // Chips below the search bar that reflect current state and can be removed individually.
+        binding.activeFiltersChipGroup.removeAllViews()
+
+        fun addRemovableChip(text: String, onRemove: () -> Unit) {
+            val chip = Chip(this).apply {
+                this.text = text
+                isCloseIconVisible = true
+                setOnCloseIconClickListener { onRemove() }
+            }
+            binding.activeFiltersChipGroup.addView(chip)
+        }
+
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isNotBlank()) {
+            addRemovableChip("Search: “$trimmedQuery”") {
+                suppressUiCallbacks = true
+                try {
+                    viewModel.setSearchQuery("")
+                    // UI controls will be synced via collector
+                } finally {
+                    suppressUiCallbacks = false
+                }
+                onStateChanged()
+            }
+        }
+
+        filter.category?.let { category ->
+            addRemovableChip("Category: $category") {
+                viewModel.setCategory(null)
+                onStateChanged()
+            }
+        }
+
+        if (filter.minPriceCents != null || filter.maxPriceCents != null) {
+            val minText = filter.minPriceCents?.let { centsToDollarsText(it) } ?: ""
+            val maxText = filter.maxPriceCents?.let { centsToDollarsText(it) } ?: ""
+            val label = when {
+                filter.minPriceCents == null -> "Price: ≤ $maxText"
+                filter.maxPriceCents == null -> "Price: ≥ $minText"
+                else -> "Price: $minText–$maxText"
+            }
+            addRemovableChip(label) {
+                viewModel.setMinPriceCents(null)
+                viewModel.setMaxPriceCents(null)
+                // also clear the price selection UI
+                suppressUiCallbacks = true
+                try {
+                    binding.priceChipGroup.clearCheck()
+                } finally {
+                    suppressUiCallbacks = false
+                }
+                onStateChanged()
+            }
+        }
+
+        binding.activeFiltersChipGroup.isVisible = binding.activeFiltersChipGroup.childCount > 0
+    }
+
+    private fun showSavePresetDialog(onSave: (name: String) -> Unit) {
+        val input = EditText(this).apply {
+            hint = "Preset name"
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Save preset")
+            .setMessage("Save current search + filters as a preset.")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text?.toString().orEmpty().trim()
+                if (name.isBlank()) {
+                    Snackbar.make(binding.root, "Name can't be empty.", Snackbar.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                onSave(name)
+            }
+            .show()
+    }
+
+    private fun showPresetsDialog(
+        onApply: (preset: FilterPreset) -> Unit,
+        onDelete: (preset: FilterPreset) -> Unit
+    ) {
+        val presets = presetStore.getAll()
+        if (presets.isEmpty()) {
+            Snackbar.make(binding.root, "No presets yet. Use “Save preset”.", Snackbar.LENGTH_SHORT).show()
+            return
+        }
+
+        val presetNames = presets.map { it.name }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Presets")
+            .setItems(presetNames) { dialog, which ->
+                dialog.dismiss()
+                val preset = presets[which]
+                showPresetActionDialog(preset, onApply = onApply, onDelete = onDelete)
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showPresetActionDialog(
+        preset: FilterPreset,
+        onApply: (preset: FilterPreset) -> Unit,
+        onDelete: (preset: FilterPreset) -> Unit
+    ) {
+        val actions = arrayOf("Apply", "Delete")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(preset.name)
+            .setItems(actions) { dialog, which ->
+                dialog.dismiss()
+                when (which) {
+                    0 -> onApply(preset)
+                    1 -> confirmDeletePreset(preset, onDelete)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeletePreset(preset: FilterPreset, onDelete: (preset: FilterPreset) -> Unit) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Delete preset?")
+            .setMessage("Delete “${preset.name}”?")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Delete") { _, _ -> onDelete(preset) }
+            .show()
+    }
+
     private fun updateEmptyStateText(query: String, hasActiveFilters: Boolean) {
         val trimmed = query.trim()
         val title = if (trimmed.isNotBlank()) {
@@ -183,6 +426,18 @@ class ProductListActivity : ComponentActivity() {
         binding.emptyTitle.text = title
         binding.emptySubtitle.text = subtitle
     }
+
+    private object ViewIds {
+        const val NO_ID = -1
+    }
+}
+
+
+
+// PUBLIC_INTERFACE
+fun centsToDollarsText(cents: Int): String {
+    /** Format cents (e.g., 2500) into a dollar string (e.g., "$25.00"). */
+    return "$" + String.format("%.2f", cents / 100.0)
 }
 
 /**

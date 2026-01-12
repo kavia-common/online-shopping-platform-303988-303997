@@ -24,6 +24,12 @@ This module implements **lazy loading / infinite scroll** for the product list u
 - Type in the search box to update results (debounced).
 - Choose a category from the dropdown.
 - Pick a price range chip (or select “Any”).
+- Active search/filters appear as **removable chips** under the search bar (tap the “x” to remove).
+- Use **Presets** to:
+  - **Save preset**: store the current search + filters under a name (saved locally on-device).
+  - **Apply** a preset: restores its query + filters and refreshes the list.
+  - **Delete** a preset you no longer need.
+- Use **Clear all** to reset both query and filters.
 - Pull-to-refresh will reload using the current search + filters.
 
 ## Where to look

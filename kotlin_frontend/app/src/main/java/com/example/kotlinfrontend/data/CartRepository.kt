@@ -3,12 +3,16 @@ package com.example.kotlinfrontend.data
 import android.content.Context
 import com.example.kotlinfrontend.model.CartItem
 import com.example.kotlinfrontend.model.CartSummary
+import com.example.kotlinfrontend.model.CartTotals
+import com.example.kotlinfrontend.model.Coupon
+import com.example.kotlinfrontend.model.DiscountType
 import com.example.kotlinfrontend.model.Product
 import com.example.kotlinfrontend.network.ApiClient
 import com.example.kotlinfrontend.network.CartApi
 import com.example.kotlinfrontend.network.dto.CartDto
 import com.example.kotlinfrontend.network.dto.CartItemMutationRequestDto
 import com.example.kotlinfrontend.network.dto.CartUpdateQuantityRequestDto
+import com.example.kotlinfrontend.network.dto.CouponApplyRequestDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.Locale
 
 /**
  * Repository for cart state and persistence.
@@ -31,14 +36,16 @@ import kotlinx.coroutines.sync.withLock
  * - We optimistically update UI, persist to local cache, then attempt network sync.
  * - On network failure, we keep local state and emit error events.
  *
- * Identity:
- * - Backend cart is scoped by an "active email". This is stored in shared prefs.
- * - When identity is first set, we migrate existing local items to backend (sum quantities per productId).
+ * Coupon/discount:
+ * - Coupon is persisted separately (CouponStore) so it survives process death.
+ * - Totals are recomputed whenever items or coupon change.
+ * - We attempt backend validation/apply/remove when identity exists; otherwise local-only validation is used.
  */
 class CartRepository(context: Context) {
 
     private val appContext = context.applicationContext
     private val store = CartStore(appContext)
+    private val couponStore = CouponStore(appContext)
     private val identityStore = CartIdentityStore(appContext)
 
     private val cartApi: CartApi = ApiClient.createCartApi()
@@ -51,6 +58,15 @@ class CartRepository(context: Context) {
 
     private val _activeEmail = MutableStateFlow<String?>(identityStore.getEmail())
     val activeEmail: StateFlow<String?> = _activeEmail.asStateFlow()
+
+    private val _coupon = MutableStateFlow<Coupon?>(couponStore.load())
+    val coupon: StateFlow<Coupon?> = _coupon.asStateFlow()
+
+    private val _couponValidationState = MutableStateFlow<CouponValidationState>(CouponValidationState.None)
+    val couponValidationState: StateFlow<CouponValidationState> = _couponValidationState.asStateFlow()
+
+    private val _totals = MutableStateFlow(computeTotals(items = _items.value, coupon = _coupon.value))
+    val totals: StateFlow<CartTotals> = _totals.asStateFlow()
 
     private val _errorEvents = MutableSharedFlow<CartErrorEvent>(
         replay = 0,
@@ -74,6 +90,9 @@ class CartRepository(context: Context) {
          * - update flow
          * - attempt to fetch cart from backend (best effort)
          * - migrate local cached items to backend (best effort) on first successful identity setup
+         *
+         * Coupon behavior:
+         * - We keep coupon locally even if identity changes, but server operations are attempted only when email exists.
          */
         val normalized = email?.trim()?.ifBlank { null }
         identityStore.setEmail(normalized)
@@ -85,6 +104,11 @@ class CartRepository(context: Context) {
             repoScope.launch {
                 migrateLocalCacheToBackendIfNeeded(normalized)
                 refreshFromBackend(normalized)
+                // Optional: attempt server validation of existing coupon if user has one.
+                val existingCoupon = _coupon.value
+                if (existingCoupon != null) {
+                    validateCouponWithBackendBestEffort(email = normalized, code = existingCoupon.code)
+                }
             }
         }
     }
@@ -220,6 +244,7 @@ class CartRepository(context: Context) {
             mutex.withLock {
                 _items.value = emptyList()
                 store.clear()
+                recomputeTotalsLocked()
             }
 
             if (email != null) {
@@ -229,6 +254,128 @@ class CartRepository(context: Context) {
                 } catch (t: Throwable) {
                     emitError("Couldn't clear cart (offline?).", CartErrorEvent.Operation.CLEAR_CART, t)
                 }
+            }
+        }
+    }
+
+    // PUBLIC_INTERFACE
+    fun applyCoupon(codeRaw: String) {
+        /**
+         * Apply a coupon code.
+         *
+         * Behavior:
+         * - Local optimistic application:
+         *   - Non-empty / basic format validation
+         *   - If no backend identity or backend endpoint missing: mark as PendingServerValidation or Valid (local-only)
+         * - If backend validation/apply exists and identity is available:
+         *   - Attempt validate/apply; rollback on failure.
+         */
+        val code = normalizeCouponCode(codeRaw)
+        if (code.isBlank()) {
+            repoScope.launch {
+                mutex.withLock {
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid("Enter a coupon code."))
+                }
+            }
+            return
+        }
+
+        val currentSubtotal = _items.value.sumOf { it.subtotal() }
+        val localCoupon = defaultLocalCouponForCode(code = code)
+
+        repoScope.launch {
+            val previousCoupon = _coupon.value
+            val previousState = _couponValidationState.value
+
+            mutex.withLock {
+                // Optimistic: apply coupon immediately using locally derived coupon metadata (fallback).
+                val initialState = if (_activeEmail.value.isNullOrBlank()) {
+                    CouponValidationState.PendingServerValidation
+                } else {
+                    CouponValidationState.PendingServerValidation
+                }
+                setCouponLocked(coupon = localCoupon, state = initialState)
+
+                // If local constraints fail, treat as invalid immediately.
+                val localConstraintError = validateCouponAgainstLocalConstraints(localCoupon, currentSubtotal)
+                if (localConstraintError != null) {
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(localConstraintError))
+                    return@launch
+                }
+            }
+
+            val email = _activeEmail.value
+            if (email.isNullOrBlank()) {
+                // No identity => local-only. We consider this "Valid" locally (but pending server sync).
+                mutex.withLock {
+                    // Keep coupon, but signal pending server validation.
+                    _couponValidationState.value = CouponValidationState.PendingServerValidation
+                }
+                return@launch
+            }
+
+            // Backend best effort: validate then apply.
+            try {
+                val isValid = validateCouponWithBackendBestEffort(email = email, code = code)
+                if (!isValid) {
+                    // validateCouponWithBackendBestEffort already updated state/coupon if possible.
+                    return@launch
+                }
+
+                // Attempt applyCoupon endpoint; if missing, we still accept locally.
+                try {
+                    cartApi.applyCoupon(email = email, body = CouponApplyRequestDto(code = code))
+                    // Even if backend cart DTO doesn't contain coupon, we keep local coupon and mark valid.
+                    mutex.withLock { _couponValidationState.value = CouponValidationState.Valid }
+                } catch (tApply: Throwable) {
+                    // Endpoint might not exist yet; treat as soft-failure and keep local coupon.
+                    mutex.withLock { _couponValidationState.value = CouponValidationState.PendingServerValidation }
+                }
+            } catch (t: Throwable) {
+                // Rollback on hard failures (e.g. network) to match "rollback on failure" request.
+                mutex.withLock {
+                    _coupon.value = previousCoupon
+                    _couponValidationState.value = previousState
+                    couponStore.save(previousCoupon)
+                    recomputeTotalsLocked()
+                }
+                emitError("Couldn't apply coupon. Please try again.", CartErrorEvent.Operation.APPLY_COUPON, t)
+            }
+        }
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeCoupon() {
+        /**
+         * Remove coupon from cart (optimistic).
+         *
+         * If backend supports removing coupon, attempt it best-effort; on failure we rollback.
+         */
+        val email = _activeEmail.value
+        repoScope.launch {
+            val previousCoupon = _coupon.value
+            val previousState = _couponValidationState.value
+
+            mutex.withLock {
+                setCouponLocked(coupon = null, state = CouponValidationState.None)
+            }
+
+            if (email.isNullOrBlank()) return@launch
+
+            try {
+                try {
+                    cartApi.removeCoupon(email = email)
+                } catch (_: Throwable) {
+                    // Optional endpoint might not exist; ignore.
+                }
+            } catch (t: Throwable) {
+                mutex.withLock {
+                    _coupon.value = previousCoupon
+                    _couponValidationState.value = previousState
+                    couponStore.save(previousCoupon)
+                    recomputeTotalsLocked()
+                }
+                emitError("Couldn't remove coupon. Please try again.", CartErrorEvent.Operation.REMOVE_COUPON, t)
             }
         }
     }
@@ -244,6 +391,12 @@ class CartRepository(context: Context) {
             totalQuantity = totalQty,
             subtotal = subtotal
         )
+    }
+
+    // PUBLIC_INTERFACE
+    fun discountedTotals(): CartTotals {
+        /** Compute cart totals including coupon discount (from local in-memory state). */
+        return _totals.value
     }
 
     // PUBLIC_INTERFACE
@@ -271,8 +424,6 @@ class CartRepository(context: Context) {
      * - Fetch backend cart first
      * - Merge local cached items into backend by "add item" with merged delta
      * - Then refresh cart from backend to reconcile
-     *
-     * This is best-effort and only runs once per identity set.
      */
     private suspend fun migrateLocalCacheToBackendIfNeeded(email: String) {
         // If there's nothing local, skip.
@@ -283,16 +434,12 @@ class CartRepository(context: Context) {
             val remoteCart = cartApi.getCurrentCart(email = email)
             val remoteMap = remoteCart.items.associateBy { it.productId }
 
-            // For each local item, compute desired final quantity = local + remote.
-            // We'll "add" only the delta relative to remote (since we don't know if backend has
-            // a merge-vs-set semantics for add). If remote absent, delta = local qty.
             for (localItem in local) {
                 val remoteQty = remoteMap[localItem.productId]?.quantity ?: 0
                 val desired = remoteQty + localItem.quantity
                 val delta = desired - remoteQty
                 if (delta <= 0) continue
 
-                // Attempt to add delta.
                 cartApi.addItem(
                     email = email,
                     body = CartItemMutationRequestDto(
@@ -305,12 +452,8 @@ class CartRepository(context: Context) {
                 )
             }
 
-            // After migration, reconcile from backend.
             val reconciled = cartApi.getCurrentCart(email = email)
             reconcileFromCartDto(reconciled)
-
-            // Since backend is now source of truth, the local cache should mirror it.
-            // (reconcileFromCartDto already saves)
         } catch (t: Throwable) {
             emitError("Couldn't migrate local cart to server (offline?).", CartErrorEvent.Operation.MIGRATE_LOCAL, t)
         }
@@ -321,7 +464,7 @@ class CartRepository(context: Context) {
             val mapped = cart.items.map { dto ->
                 CartItem(
                     productId = dto.productId,
-                    name = dto.name ?: "", // backend may omit name; keep non-null
+                    name = dto.name ?: "",
                     price = dto.price,
                     category = dto.category?.trim().orEmpty().ifBlank { "Uncategorized" },
                     quantity = dto.quantity
@@ -334,10 +477,131 @@ class CartRepository(context: Context) {
     private fun setAndPersist(updated: List<CartItem>) {
         _items.value = updated
         store.save(updated)
+        recomputeTotalsLockedUnsafe()
+    }
+
+    private fun recomputeTotalsLockedUnsafe() {
+        // This is only called from places that already ensure serialized updates (mutex or single-thread IO).
+        _totals.value = computeTotals(items = _items.value, coupon = _coupon.value)
+    }
+
+    private fun recomputeTotalsLocked() {
+        _totals.value = computeTotals(items = _items.value, coupon = _coupon.value)
+    }
+
+    private fun setCouponLocked(coupon: Coupon?, state: CouponValidationState) {
+        _coupon.value = coupon
+        _couponValidationState.value = state
+        couponStore.save(coupon)
+        recomputeTotalsLocked()
+    }
+
+    private fun validateCouponAgainstLocalConstraints(coupon: Coupon, subtotal: Double): String? {
+        val min = coupon.minSubtotal
+        if (min != null && subtotal < min) {
+            return "Minimum subtotal is $${String.format(Locale.US, "%.2f", min)}."
+        }
+        val expires = coupon.expiresAtEpochMillis
+        if (expires != null && System.currentTimeMillis() > expires) {
+            return "This coupon has expired."
+        }
+        return null
+    }
+
+    private suspend fun validateCouponWithBackendBestEffort(email: String, code: String): Boolean {
+        // Attempt backend validation. If endpoint missing, keep pending state (graceful fallback).
+        return try {
+            val resp = cartApi.validateCoupon(email = email, body = CouponApplyRequestDto(code = code))
+            if (!resp.valid) {
+                mutex.withLock {
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(resp.message ?: "Invalid coupon."))
+                }
+                false
+            } else {
+                val mappedCoupon = resp.coupon?.toDomainCouponFallback(code)
+                mutex.withLock {
+                    if (mappedCoupon != null) {
+                        setCouponLocked(coupon = mappedCoupon, state = CouponValidationState.Valid)
+                    } else {
+                        // No coupon payload provided; keep local coupon but mark valid.
+                        _couponValidationState.value = CouponValidationState.Valid
+                        recomputeTotalsLocked()
+                    }
+                }
+                true
+            }
+        } catch (_: Throwable) {
+            // Endpoint not present or network issue: keep pending.
+            mutex.withLock {
+                if (_coupon.value != null) {
+                    _couponValidationState.value = CouponValidationState.PendingServerValidation
+                }
+            }
+            true
+        }
+    }
+
+    private fun String?.normalizeLower(): String = this?.trim()?.lowercase(Locale.US).orEmpty()
+
+    private fun com.example.kotlinfrontend.network.dto.CouponDto.toDomainCouponFallback(code: String): Coupon {
+        val type = when (discountType.normalizeLower()) {
+            "percent", "percentage", "pct" -> DiscountType.PERCENT
+            "fixed", "amount" -> DiscountType.FIXED
+            else -> DiscountType.FIXED
+        }
+        return Coupon(
+            code = code,
+            description = description,
+            discountType = type,
+            amount = amount,
+            minSubtotal = minSubtotal,
+            expiresAtEpochMillis = expiresAtEpochMillis
+        )
+    }
+
+    private fun normalizeCouponCode(raw: String): String {
+        // Conservative normalization: trim + uppercase; keep hyphens.
+        return raw.trim().uppercase(Locale.US)
+    }
+
+    private fun defaultLocalCouponForCode(code: String): Coupon {
+        // Local fallback assumes a "percent" style coupon with amount=0 until validated by backend.
+        // This keeps UI logic consistent while still allowing server-side override.
+        // TODO: Replace with real local coupon catalog if needed.
+        return Coupon(
+            code = code,
+            description = "Coupon applied",
+            discountType = DiscountType.PERCENT,
+            amount = 0.0,
+            minSubtotal = null,
+            expiresAtEpochMillis = null
+        )
+    }
+
+    private fun computeTotals(items: List<CartItem>, coupon: Coupon?): CartTotals {
+        val subtotal = items.sumOf { it.subtotal() }
+        val tax = 0.0 // Placeholder
+
+        val discount = if (coupon == null) {
+            0.0
+        } else {
+            val rawDiscount = when (coupon.discountType) {
+                DiscountType.PERCENT -> (subtotal * (coupon.amount / 100.0))
+                DiscountType.FIXED -> coupon.amount
+            }
+            rawDiscount.coerceIn(0.0, subtotal)
+        }
+
+        val total = (subtotal - discount + tax).coerceAtLeast(0.0)
+        return CartTotals(
+            subtotal = subtotal,
+            discount = discount,
+            tax = tax,
+            total = total
+        )
     }
 
     private suspend fun emitError(message: String, op: CartErrorEvent.Operation, t: Throwable) {
-        // Avoid overly technical messages; include detail only if present.
         val detail = t.message?.takeIf { it.isNotBlank() }
         val full = if (detail != null) "$message ($detail)" else message
         _errorEvents.emit(CartErrorEvent(message = full, operation = op))

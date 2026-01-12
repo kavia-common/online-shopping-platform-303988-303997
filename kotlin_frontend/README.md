@@ -57,6 +57,7 @@ This module implements **lazy loading / infinite scroll** for the product list u
     - A Snackbar offers **Undo** (restores the previous quantity)
   - Use **Remove** for a single item
   - Use **Clear cart** to remove all items
+  - Apply a **coupon code** to see a **Discount** line and updated **Total**
   - Tap **Checkout** to place an order using the backend Order APIs
 
 ### Cart persistence + backend sync (per user)
@@ -70,6 +71,28 @@ Cart actions are **optimistic**:
 - UI updates immediately and is saved locally.
 - The app then attempts to sync with the backend.
 - If the network call fails, the local cart remains and a transient error is shown.
+
+### Coupons / discounts (new)
+The cart supports applying/removing a **coupon code**:
+- Coupon state is persisted locally (SharedPreferences) so it survives process death.
+- Totals now include:
+  - Subtotal
+  - Discount (when a coupon is applied)
+  - Total (subtotal - discount; tax is currently a placeholder)
+
+#### Backend validation behavior
+When an identity email is available, the app will **attempt** to validate/apply the coupon with backend endpoints if they exist:
+- `POST /api/coupons/validate?email=...` (body: `{ "code": "..." }`)
+- `POST /api/carts/coupon?email=...` (body: `{ "code": "..." }`)
+- `DELETE /api/carts/coupon?email=...`
+
+If these endpoints are not present yet (404) or network fails, the app falls back gracefully:
+- Coupon can remain applied as **Pending server validation** (UI continues to show totals)
+- If a hard failure happens during apply/remove, the app rolls back and shows a Snackbar with Retry.
+
+#### Emulator + localhost reminder
+If you run the backend on your development machine and test on an Android emulator, `http://localhost:3010` will point to the emulator itself. In that case, you typically want:
+- `http://10.0.2.2:3010`
 
 #### Migration (local -> backend)
 When you set your email identity for the first time, any existing local cart items are migrated to the backend:

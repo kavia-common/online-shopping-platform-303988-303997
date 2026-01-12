@@ -15,6 +15,8 @@ data class CartErrorEvent(
         UPDATE_QTY,
         REMOVE_ITEM,
         CLEAR_CART,
-        MIGRATE_LOCAL
+        MIGRATE_LOCAL,
+        APPLY_COUPON,
+        REMOVE_COUPON
     }
 }

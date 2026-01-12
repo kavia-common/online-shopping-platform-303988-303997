@@ -73,6 +73,13 @@ data class OrderCreateRequestDto(
     @Json(name = "email")
     val email: String? = null,
 
+    /**
+     * Optional coupon code to be validated/priced by backend consistently.
+     * Backend may ignore if not supported.
+     */
+    @Json(name = "couponCode")
+    val couponCode: String? = null,
+
     @Json(name = "items")
     val items: List<OrderCreateItemRequestDto>
 )

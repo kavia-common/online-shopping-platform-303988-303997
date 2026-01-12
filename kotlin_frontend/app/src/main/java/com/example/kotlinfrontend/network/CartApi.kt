@@ -3,6 +3,8 @@ package com.example.kotlinfrontend.network
 import com.example.kotlinfrontend.network.dto.CartDto
 import com.example.kotlinfrontend.network.dto.CartItemMutationRequestDto
 import com.example.kotlinfrontend.network.dto.CartUpdateQuantityRequestDto
+import com.example.kotlinfrontend.network.dto.CouponApplyRequestDto
+import com.example.kotlinfrontend.network.dto.CouponValidationResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -65,4 +67,39 @@ interface CartApi {
     suspend fun clearCart(
         @Query("email") email: String?
     ): CartDto
+
+    /**
+     * Apply a coupon to the current cart.
+     *
+     * Optional hook: backend may expose this.
+     * Proposed endpoint (per task): POST /api/carts/coupon?email=...
+     */
+    @POST("/api/carts/coupon")
+    suspend fun applyCoupon(
+        @Query("email") email: String?,
+        @Body body: CouponApplyRequestDto
+    ): CartDto
+
+    /**
+     * Remove coupon from current cart.
+     *
+     * Optional hook: backend may expose this.
+     * Proposed endpoint (per task): DELETE /api/carts/coupon?email=...
+     */
+    @DELETE("/api/carts/coupon")
+    suspend fun removeCoupon(
+        @Query("email") email: String?
+    ): CartDto
+
+    /**
+     * Validate a coupon code.
+     *
+     * Optional hook: backend may expose this.
+     * Proposed endpoint: POST /api/coupons/validate?email=...
+     */
+    @POST("/api/coupons/validate")
+    suspend fun validateCoupon(
+        @Query("email") email: String?,
+        @Body body: CouponApplyRequestDto
+    ): CouponValidationResponseDto
 }

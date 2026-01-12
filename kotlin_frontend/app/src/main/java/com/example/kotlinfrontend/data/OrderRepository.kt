@@ -22,10 +22,11 @@ class OrderRepository(
     )
 
     // PUBLIC_INTERFACE
-    suspend fun createOrder(email: String?, items: List<Pair<String, Int>>): Order {
-        /** Create an order with (productId, quantity) items. */
+    suspend fun createOrder(email: String?, items: List<Pair<String, Int>>, couponCode: String? = null): Order {
+        /** Create an order with (productId, quantity) items and optional couponCode. */
         val body = OrderCreateRequestDto(
             email = email?.trim()?.ifBlank { null },
+            couponCode = couponCode?.trim()?.ifBlank { null },
             items = items.map { (productId, quantity) ->
                 OrderCreateItemRequestDto(productId = productId, quantity = quantity)
             }

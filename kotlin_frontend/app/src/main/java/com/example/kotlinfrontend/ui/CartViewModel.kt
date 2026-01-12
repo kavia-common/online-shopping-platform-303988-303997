@@ -5,8 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
 import com.example.kotlinfrontend.data.CartErrorEvent
+import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.model.CartItem
 import com.example.kotlinfrontend.model.CartSummary
+import com.example.kotlinfrontend.model.CartTotals
+import com.example.kotlinfrontend.model.Coupon
 import com.example.kotlinfrontend.model.Product
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +31,19 @@ class CartViewModel(application: Application) : AndroidViewModel(application) {
 
     val items: StateFlow<List<CartItem>> =
         cartRepo.items.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.items.value)
+
+    val coupon: StateFlow<Coupon?> =
+        cartRepo.coupon.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.coupon.value)
+
+    val couponValidationState: StateFlow<CouponValidationState> =
+        cartRepo.couponValidationState.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            cartRepo.couponValidationState.value
+        )
+
+    val totals: StateFlow<CartTotals> =
+        cartRepo.totals.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.discountedTotals())
 
     /**
      * Flattened list model for the RecyclerView: category headers + item rows.
@@ -96,6 +112,18 @@ class CartViewModel(application: Application) : AndroidViewModel(application) {
     fun clear() {
         /** Clear the cart. */
         cartRepo.clear()
+    }
+
+    // PUBLIC_INTERFACE
+    fun applyCoupon(code: String) {
+        /** Apply a coupon code (optimistic, validated with backend when available). */
+        cartRepo.applyCoupon(code)
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeCoupon() {
+        /** Remove the currently applied coupon. */
+        cartRepo.removeCoupon()
     }
 }
 

@@ -17,11 +17,14 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.kotlinfrontend.R
+import com.example.kotlinfrontend.data.CartErrorEvent
+import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.databinding.ActivityCartBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class CartActivity : ComponentActivity() {
 
@@ -50,6 +53,7 @@ class CartActivity : ComponentActivity() {
         setupActions()
         bindState()
         bindErrorsAndIdentity()
+        bindCouponUi()
     }
 
     private fun setupToolbar() {
@@ -97,9 +101,7 @@ class CartActivity : ComponentActivity() {
                 rv: RecyclerView,
                 vh: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder
-            ): Boolean {
-                return false
-            }
+            ): Boolean = false
 
             override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int {
                 // Only item rows are swipeable; headers should not swipe.
@@ -119,7 +121,6 @@ class CartActivity : ComponentActivity() {
                     return
                 }
 
-                // Remove from repo (maintains existing contracts + badge behavior via existing flows).
                 pendingUndo = PendingUndo(
                     productId = item.productId,
                     name = item.name,
@@ -133,13 +134,11 @@ class CartActivity : ComponentActivity() {
                 Snackbar.make(binding.root, "Removed ${item.name}", Snackbar.LENGTH_LONG)
                     .setAction("Undo") {
                         val undo = pendingUndo ?: return@setAction
-                        // Restore previous quantity for the same productId.
                         viewModel.updateQty(undo.productId, undo.previousQuantity)
                         announceForA11y(binding.root, "Restored ${undo.name}.")
                     }
                     .addCallback(object : Snackbar.Callback() {
                         override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                            // If it timed out or was dismissed, clear pending state.
                             pendingUndo = null
                         }
                     })
@@ -166,7 +165,6 @@ class CartActivity : ComponentActivity() {
         }
 
         binding.checkoutButton.setOnClickListener {
-            // If identity email is missing, prompt here to align with CartIdentity flow.
             val email = viewModel.activeEmail.value
             if (email.isNullOrBlank()) {
                 CartIdentityPrompter.promptForEmail(
@@ -185,8 +183,16 @@ class CartActivity : ComponentActivity() {
         }
 
         binding.browseProductsButton.setOnClickListener {
-            // Navigate back to product list (simple and consistent with current nav approach).
             finish()
+        }
+
+        // Coupon actions
+        binding.applyCouponButton.setOnClickListener {
+            val code = binding.couponCodeEditText.text?.toString().orEmpty()
+            viewModel.applyCoupon(code)
+        }
+        binding.removeCouponButton.setOnClickListener {
+            viewModel.removeCoupon()
         }
     }
 
@@ -226,7 +232,6 @@ class CartActivity : ComponentActivity() {
                     adapter.submitList(rows)
 
                     val isEmpty = rows.isEmpty()
-                    // Crossfade between empty and content to avoid full-screen flicker during refreshes.
                     crossfadeVisibility(binding.emptyState, show = isEmpty, durationMs = crossfadeDuration)
                     crossfadeVisibility(binding.contentContainer, show = !isEmpty, durationMs = crossfadeDuration)
                 }
@@ -235,8 +240,20 @@ class CartActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.totals.collectLatest { totals ->
+                    binding.subtotalValue.text = "$" + String.format(Locale.US, "%.2f", totals.subtotal)
+                    binding.totalValue.text = "$" + String.format(Locale.US, "%.2f", totals.total)
+
+                    val hasDiscount = totals.discount > 0.00001
+                    binding.discountRow.isVisible = hasDiscount
+                    binding.discountValue.text = "-$" + String.format(Locale.US, "%.2f", totals.discount)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.summary.collectLatest { summary ->
-                    binding.subtotalValue.text = "$" + String.format("%.2f", summary.subtotal)
                     binding.itemCountValue.text = "${summary.totalQuantity}"
                 }
             }
@@ -247,13 +264,64 @@ class CartActivity : ComponentActivity() {
                 viewModel.itemCount.collectLatest { count ->
                     binding.clearCartButton.isEnabled = count > 0
                     binding.checkoutButton.isEnabled = count > 0
+                    binding.applyCouponButton.isEnabled = count > 0
+                }
+            }
+        }
+    }
+
+    private fun bindCouponUi() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.coupon.collectLatest { coupon ->
+                    val hasCoupon = coupon != null
+                    binding.appliedCouponRow.isVisible = hasCoupon
+                    binding.removeCouponButton.isVisible = hasCoupon
+
+                    if (hasCoupon) {
+                        val desc = coupon?.description?.takeIf { it.isNotBlank() }
+                        val label = if (desc != null) {
+                            "Coupon: ${coupon.code} • $desc"
+                        } else {
+                            "Coupon: ${coupon?.code}"
+                        }
+                        binding.appliedCouponText.text = label
+                        binding.couponCodeEditText.setText(coupon?.code.orEmpty())
+                    } else {
+                        binding.appliedCouponText.text = "Coupon: -"
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.couponValidationState.collectLatest { state ->
+                    when (state) {
+                        is CouponValidationState.None -> {
+                            binding.couponInputLayout.error = null
+                        }
+                        is CouponValidationState.Valid -> {
+                            binding.couponInputLayout.error = null
+                            Snackbar.make(binding.root, "Discount applied.", Snackbar.LENGTH_SHORT).show()
+                            announceForA11y(binding.root, "Discount applied.")
+                        }
+                        is CouponValidationState.PendingServerValidation -> {
+                            // No inline error; keep it subtle.
+                            binding.couponInputLayout.error = null
+                        }
+                        is CouponValidationState.Invalid -> {
+                            binding.couponInputLayout.error = state.message
+                            Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG).show()
+                            announceForA11y(binding.root, "Coupon invalid.")
+                        }
+                    }
                 }
             }
         }
     }
 
     private fun bindErrorsAndIdentity() {
-        // Prompt for identity if missing; otherwise load from backend.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.activeEmail.collectLatest { email ->
@@ -271,19 +339,32 @@ class CartActivity : ComponentActivity() {
             }
         }
 
-        // Show transient network errors (offline fallback).
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.errorEvents.collectLatest { event ->
-                    Snackbar.make(binding.root, event.message, Snackbar.LENGTH_LONG)
-                        .setAction("Retry") {
-                            // Retry is intentionally simple: user action is re-triggered by UI;
-                            // for load errors, we can re-ensure cart is loaded.
-                            if (event.operation == com.example.kotlinfrontend.data.CartErrorEvent.Operation.GET_CART) {
-                                viewModel.ensureCartLoaded()
+                    val snack = Snackbar.make(binding.root, event.message, Snackbar.LENGTH_LONG)
+
+                    val canRetry = when (event.operation) {
+                        CartErrorEvent.Operation.GET_CART -> true
+                        CartErrorEvent.Operation.APPLY_COUPON -> true
+                        CartErrorEvent.Operation.REMOVE_COUPON -> true
+                        else -> false
+                    }
+
+                    if (canRetry) {
+                        snack.setAction("Retry") {
+                            when (event.operation) {
+                                CartErrorEvent.Operation.GET_CART -> viewModel.ensureCartLoaded()
+                                CartErrorEvent.Operation.APPLY_COUPON -> {
+                                    val code = binding.couponCodeEditText.text?.toString().orEmpty()
+                                    viewModel.applyCoupon(code)
+                                }
+                                CartErrorEvent.Operation.REMOVE_COUPON -> viewModel.removeCoupon()
+                                else -> Unit
                             }
                         }
-                        .show()
+                    }
+                    snack.show()
                 }
             }
         }

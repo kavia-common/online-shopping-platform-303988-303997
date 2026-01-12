@@ -6,8 +6,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
+import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.data.OrderRepository
 import com.example.kotlinfrontend.model.CartItem
+import com.example.kotlinfrontend.model.CartTotals
+import com.example.kotlinfrontend.model.Coupon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,7 +41,8 @@ class CheckoutViewModel(
         val postalCode: String = "",
         val country: String = "",
         val note: String = "",
-        val mockPaymentSuccess: Boolean = true
+        val mockPaymentSuccess: Boolean = true,
+        val couponInput: String = ""
     )
 
     data class FieldErrors(
@@ -73,6 +77,10 @@ class CheckoutViewModel(
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
 
     val cartItems: StateFlow<List<CartItem>> = cartRepo.items
+
+    val coupon: StateFlow<Coupon?> = cartRepo.coupon
+    val couponValidationState: StateFlow<CouponValidationState> = cartRepo.couponValidationState
+    val totals: StateFlow<CartTotals> = cartRepo.totals
 
     // PUBLIC_INTERFACE
     fun prefillEmailIfAvailable() {
@@ -138,6 +146,24 @@ class CheckoutViewModel(
     }
 
     // PUBLIC_INTERFACE
+    fun updateCouponInput(value: String) {
+        /** Update the editable coupon input field (does not apply). */
+        setForm(_form.value.copy(couponInput = value))
+    }
+
+    // PUBLIC_INTERFACE
+    fun applyCouponFromCheckout() {
+        /** Apply coupon using current coupon input value. */
+        cartRepo.applyCoupon(_form.value.couponInput)
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeCoupon() {
+        /** Remove applied coupon. */
+        cartRepo.removeCoupon()
+    }
+
+    // PUBLIC_INTERFACE
     fun clearSubmitError() {
         /** Clear transient submission error state, keeping form state intact. */
         if (_submitState.value is SubmitState.Error) {
@@ -149,6 +175,10 @@ class CheckoutViewModel(
     fun placeOrder() {
         /**
          * Validates the form, maps cart items -> backend Order create request, calls API, and clears cart on success.
+         *
+         * Coupon:
+         * - We include couponCode when repository currently has one.
+         * - If backend ignores/doesn't support it, request remains compatible.
          */
         val items = cartRepo.items.value
         if (items.isEmpty()) {
@@ -180,16 +210,20 @@ class CheckoutViewModel(
 
         viewModelScope.launch {
             try {
-                // Keep using existing DTOs: OrderCreateRequestDto only supports email + items.
-                // (Address fields are captured in UI for later enhancement; not sent yet.)
                 val pairs = items.map { it.productId to it.quantity }
-                val created = orderRepo.createOrder(email = form.email, items = pairs)
+                val couponCode = cartRepo.coupon.value?.code
+
+                val created = orderRepo.createOrder(
+                    email = form.email,
+                    items = pairs,
+                    couponCode = couponCode
+                )
 
                 // Clear local cart after successful order creation.
                 cartRepo.clear()
 
                 val orderId = created.id
-                val total = cartRepo.summary().subtotal.takeIf { it > 0.0 } ?: (created.totalAmount ?: 0.0)
+                val total = cartRepo.discountedTotals().total.takeIf { it > 0.0 } ?: (created.totalAmount ?: 0.0)
                 _submitState.value = SubmitState.Success(orderId = orderId, total = total)
             } catch (t: Throwable) {
                 _submitState.value = mapError(t)
@@ -207,7 +241,6 @@ class CheckoutViewModel(
     }
 
     private fun validate(form: FormState): FieldErrors {
-        // Customer name: required by requirements (even if not used in backend payload yet).
         val customerNameError = if (form.customerName.trim().isBlank()) "Required" else null
 
         val email = form.email.trim()
@@ -230,24 +263,16 @@ class CheckoutViewModel(
         )
     }
 
-    /**
-     * Maps known networking errors into user-friendly messages.
-     *
-     * We also attempt a best-effort extraction of field-level errors if backend returns them as JSON,
-     * but we avoid tight coupling to a specific backend error schema.
-     */
     private fun mapError(t: Throwable): SubmitState.Error {
         return when (t) {
             is IOException -> SubmitState.Error("Network error. Check your connection and try again.")
             is HttpException -> {
-                // Try to extract a readable server message.
                 val body = try {
                     t.response()?.errorBody()?.string()
                 } catch (_: Throwable) {
                     null
                 }
 
-                // Best-effort: if server returns a JSON like {"message":"..."} show it; otherwise generic.
                 val msg = when {
                     !body.isNullOrBlank() -> "Server error (${t.code()}): ${body.take(160)}"
                     else -> "Server error (${t.code()}). Please try again."

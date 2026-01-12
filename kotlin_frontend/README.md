@@ -57,6 +57,22 @@ This module implements **lazy loading / infinite scroll** for the product list u
   - Use **Clear cart** to remove all items
   - Tap **Checkout** to see a stub action (not implemented)
 
+### Cart persistence + backend sync (per user)
+Cart is now **backend-synced** and persisted **per user identity** (temporary email):
+- The app will prompt for an **email** the first time you try to add/view cart.
+- That email is stored locally and sent to the backend on cart requests (currently as `?email=...`).
+- The cart is still cached locally using **SharedPreferences + JSON** as an **offline fallback**.
+
+#### Offline fallback
+Cart actions are **optimistic**:
+- UI updates immediately and is saved locally.
+- The app then attempts to sync with the backend.
+- If the network call fails, the local cart remains and a transient error is shown.
+
+#### Migration (local -> backend)
+When you set your email identity for the first time, any existing local cart items are migrated to the backend:
+- Merge behavior: quantities are **summed per productId**.
+
 ### Cart persistence
 Cart data is stored locally on-device using **SharedPreferences + JSON**, so it survives app restarts and process death.
 

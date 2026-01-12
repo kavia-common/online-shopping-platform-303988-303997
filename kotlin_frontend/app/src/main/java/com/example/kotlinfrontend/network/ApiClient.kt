@@ -46,4 +46,12 @@ object ApiClient {
         /** Create an OrderApi instance using the provided baseUrl. */
         return createRetrofit(baseUrl).create(OrderApi::class.java)
     }
+
+    // PUBLIC_INTERFACE
+    fun createCartApi(
+        baseUrl: String = ApiConfig.DEFAULT_BASE_URL
+    ): CartApi {
+        /** Create a CartApi instance using the provided baseUrl. */
+        return createRetrofit(baseUrl).create(CartApi::class.java)
+    }
 }

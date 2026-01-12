@@ -33,6 +33,7 @@ class CartActivity : ComponentActivity() {
         setupRecycler()
         setupActions()
         bindState()
+        bindErrorsAndIdentity()
     }
 
     private fun setupToolbar() {
@@ -111,6 +112,43 @@ class CartActivity : ComponentActivity() {
                 viewModel.itemCount.collectLatest { count ->
                     binding.clearCartButton.isEnabled = count > 0
                     binding.checkoutButton.isEnabled = count > 0
+                }
+            }
+        }
+    }
+
+    private fun bindErrorsAndIdentity() {
+        // Prompt for identity if missing; otherwise load from backend.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.activeEmail.collectLatest { email ->
+                    if (email.isNullOrBlank()) {
+                        CartIdentityPrompter.promptForEmail(
+                            context = this@CartActivity,
+                            onEmailSaved = { entered ->
+                                viewModel.setActiveEmail(entered)
+                            }
+                        )
+                    } else {
+                        viewModel.ensureCartLoaded()
+                    }
+                }
+            }
+        }
+
+        // Show transient network errors (offline fallback).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.errorEvents.collectLatest { event ->
+                    Snackbar.make(binding.root, event.message, Snackbar.LENGTH_LONG)
+                        .setAction("Retry") {
+                            // Retry is intentionally simple: user action is re-triggered by UI;
+                            // for load errors, we can re-ensure cart is loaded.
+                            if (event.operation == com.example.kotlinfrontend.data.CartErrorEvent.Operation.GET_CART) {
+                                viewModel.ensureCartLoaded()
+                            }
+                        }
+                        .show()
                 }
             }
         }

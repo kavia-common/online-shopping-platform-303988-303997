@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
+import com.example.kotlinfrontend.data.CartErrorEvent
 import com.example.kotlinfrontend.model.CartItem
 import com.example.kotlinfrontend.model.CartSummary
 import com.example.kotlinfrontend.model.Product
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -18,6 +20,11 @@ import kotlinx.coroutines.flow.stateIn
 class CartViewModel(application: Application) : AndroidViewModel(application) {
 
     private val cartRepo = AppRepositories.cart(application)
+
+    val activeEmail: StateFlow<String?> =
+        cartRepo.activeEmail.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.activeEmail.value)
+
+    val errorEvents: SharedFlow<CartErrorEvent> = cartRepo.errorEvents
 
     val items: StateFlow<List<CartItem>> =
         cartRepo.items.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.items.value)
@@ -54,6 +61,18 @@ class CartViewModel(application: Application) : AndroidViewModel(application) {
         cartRepo.items
             .map { list -> list.sumOf { it.quantity } }
             .stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.items.value.sumOf { it.quantity })
+
+    // PUBLIC_INTERFACE
+    fun ensureCartLoaded() {
+        /** Ensure backend cart has been fetched at least once for the current identity. */
+        cartRepo.ensureCartLoaded()
+    }
+
+    // PUBLIC_INTERFACE
+    fun setActiveEmail(email: String?) {
+        /** Set (or clear) the cart identity (email) used for backend cart ownership. */
+        cartRepo.setActiveEmail(email)
+    }
 
     // PUBLIC_INTERFACE
     fun addItem(product: Product, qty: Int) {

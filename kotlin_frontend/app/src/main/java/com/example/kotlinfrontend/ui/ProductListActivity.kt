@@ -30,6 +30,23 @@ import kotlinx.coroutines.launch
 
 class ProductListActivity : ComponentActivity() {
 
+    private fun ensureCartIdentityOrPrompt(onReady: () -> Unit) {
+        // Helper used from multiple member functions (including rebuildGroupedSections).
+        val cartRepo = AppRepositories.cart(this)
+        val email = cartRepo.activeEmail.value
+        if (!email.isNullOrBlank()) {
+            onReady()
+            return
+        }
+        CartIdentityPrompter.promptForEmail(
+            context = this,
+            onEmailSaved = { entered ->
+                cartRepo.setActiveEmail(entered)
+                onReady()
+            }
+        )
+    }
+
     private fun setupCategoryChipsAndGrouping(productAdapter: ProductAdapter) {
         // Observe categories list from backend and render chips.
         lifecycleScope.launch {
@@ -165,22 +182,32 @@ class ProductListActivity : ComponentActivity() {
                     cartRepo.items.value.firstOrNull { it.productId == productId }?.quantity ?: 0
                 },
                 onAddToCart = { product: Product, qty: Int ->
-                    cartRepo.addItem(product, qty)
-                    Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
-                    // Force redraw of preview rows so qty text reflects latest state.
-                    rebuildGroupedSections()
+                    ensureCartIdentityOrPrompt {
+                        cartRepo.addItem(product, qty)
+                        Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
+                        // Force redraw of preview rows so qty text reflects latest state.
+                        rebuildGroupedSections()
+                    }
                 },
                 onIncrementInCart = { product: Product ->
-                    cartRepo.addItem(product, 1)
-                    Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
-                    rebuildGroupedSections()
+                    ensureCartIdentityOrPrompt {
+                        cartRepo.addItem(product, 1)
+                        Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                        rebuildGroupedSections()
+                    }
                 },
                 onDecrementInCart = { product: Product ->
-                    val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
-                    val newQty = current - 1
-                    cartRepo.updateQty(product.id, newQty)
-                    Snackbar.make(binding.root, if (newQty <= 0) "Removed item." else "Updated quantity.", Snackbar.LENGTH_SHORT).show()
-                    rebuildGroupedSections()
+                    ensureCartIdentityOrPrompt {
+                        val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
+                        val newQty = current - 1
+                        cartRepo.updateQty(product.id, newQty)
+                        Snackbar.make(
+                            binding.root,
+                            if (newQty <= 0) "Removed item." else "Updated quantity.",
+                            Snackbar.LENGTH_SHORT
+                        ).show()
+                        rebuildGroupedSections()
+                    }
                 }
             )
 
@@ -268,7 +295,7 @@ class ProductListActivity : ComponentActivity() {
         binding = ActivityProductListBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Cart integration (persistent, process-death safe).
+        // Cart integration (persistent, process-death safe + backend synced).
         val cartRepo = AppRepositories.cart(this)
 
         val productAdapter = ProductAdapter(
@@ -279,21 +306,31 @@ class ProductListActivity : ComponentActivity() {
             // These callbacks need to reference the adapter instance; using apply avoids "val used in its own initializer".
             setCartCallbacks(
                 onAddToCart = { product, qty ->
-                    cartRepo.addItem(product, qty)
-                    Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
-                    this@apply.notifyDataSetChanged()
+                    ensureCartIdentityOrPrompt {
+                        cartRepo.addItem(product, qty)
+                        Snackbar.make(binding.root, "Added to cart.", Snackbar.LENGTH_SHORT).show()
+                        this@apply.notifyDataSetChanged()
+                    }
                 },
                 onIncrementInCart = { product ->
-                    cartRepo.addItem(product, 1)
-                    Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
-                    this@apply.notifyDataSetChanged()
+                    ensureCartIdentityOrPrompt {
+                        cartRepo.addItem(product, 1)
+                        Snackbar.make(binding.root, "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                        this@apply.notifyDataSetChanged()
+                    }
                 },
                 onDecrementInCart = { product ->
-                    val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
-                    val newQty = current - 1
-                    cartRepo.updateQty(product.id, newQty)
-                    Snackbar.make(binding.root, if (newQty <= 0) "Removed item." else "Updated quantity.", Snackbar.LENGTH_SHORT).show()
-                    this@apply.notifyDataSetChanged()
+                    ensureCartIdentityOrPrompt {
+                        val current = cartRepo.items.value.firstOrNull { it.productId == product.id }?.quantity ?: 0
+                        val newQty = current - 1
+                        cartRepo.updateQty(product.id, newQty)
+                        Snackbar.make(
+                            binding.root,
+                            if (newQty <= 0) "Removed item." else "Updated quantity.",
+                            Snackbar.LENGTH_SHORT
+                        ).show()
+                        this@apply.notifyDataSetChanged()
+                    }
                 }
             )
         }
@@ -322,6 +359,17 @@ class ProductListActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 AppRepositories.cartItemCount(this@ProductListActivity).collectLatest { count ->
                     badgeController.setCount(count)
+                }
+            }
+        }
+
+        // If identity exists, refresh cart from backend once when screen starts.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                cartRepo.activeEmail.collectLatest { email ->
+                    if (!email.isNullOrBlank()) {
+                        cartRepo.ensureCartLoaded()
+                    }
                 }
             }
         }

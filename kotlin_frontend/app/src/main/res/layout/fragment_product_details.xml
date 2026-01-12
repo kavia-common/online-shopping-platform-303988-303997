@@ -22,48 +22,58 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
+            <!-- Large image placeholder (mock) -->
+            <View
+                android:id="@+id/product_image_large"
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:background="@drawable/bg_chip_outline"
+                android:contentDescription="@string/title_product_details" />
+
             <TextView
                 android:id="@+id/tv_name"
                 style="@style/TextAppearance.Ocean.Title"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" />
 
             <TextView
                 android:id="@+id/tv_category"
-                style="@style/TextAppearance.Ocean.Muted"
+                style="@style/TextAppearance.Ocean.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp" />
+                android:layout_marginTop="8dp" />
 
             <TextView
                 android:id="@+id/tv_price"
-                style="@style/TextAppearance.Ocean.Body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp" />
-
-            <TextView
-                android:id="@+id/tv_description"
-                style="@style/TextAppearance.Ocean.Muted"
+                style="@style/TextAppearance.Ocean.Price"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_add_to_cart"
+            <TextView
+                android:id="@+id/tv_description"
+                style="@style/TextAppearance.Ocean.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                android:lineSpacingExtra="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_add_to_cart"
+                style="@style/Widget.Ocean.Button.Primary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
                 android:text="@string/add_to_cart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_go_to_cart"
+                style="@style/Widget.Ocean.Button.Secondary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="@string/go_to_cart"
-                app:backgroundTint="@color/ocean_secondary"
-                android:textColor="@color/ocean_text" />
+                android:layout_marginTop="12dp"
+                android:text="@string/go_to_cart" />
 
         </LinearLayout>
 

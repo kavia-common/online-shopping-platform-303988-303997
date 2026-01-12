@@ -15,20 +15,47 @@
         <item name="android:textColorPrimary">@color/ocean_text</item>
         <item name="android:textColorSecondary">@color/ocean_muted_text</item>
 
+        <!-- Typography / UI defaults -->
+        <item name="android:windowBackground">@color/ocean_background</item>
+
         <!-- Default component styling -->
-        <item name="materialButtonStyle">@style/Widget.Ocean.Button</item>
+        <item name="materialButtonStyle">@style/Widget.Ocean.Button.Primary</item>
         <item name="textInputStyle">@style/Widget.Ocean.TextInputLayout</item>
+
+        <!-- Toolbar -->
+        <item name="toolbarStyle">@style/Widget.Ocean.Toolbar</item>
+
         <item name="android:statusBarColor">@color/ocean_primary</item>
     </style>
 
-    <style name="Widget.Ocean.Button" parent="Widget.MaterialComponents.Button">
+    <!-- Buttons -->
+    <style name="Widget.Ocean.Button.Base" parent="Widget.MaterialComponents.Button">
         <item name="cornerRadius">14dp</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
+
+        <!-- Accessibility: 48dp touch target -->
         <item name="android:minHeight">48dp</item>
+
+        <!-- Subtle pressed/ripple -->
+        <item name="rippleColor">@color/ocean_primary_12</item>
     </style>
 
+    <style name="Widget.Ocean.Button.Primary" parent="Widget.Ocean.Button.Base">
+        <item name="backgroundTint">@color/ocean_primary</item>
+        <item name="android:textColor">@color/ocean_on_primary</item>
+    </style>
+
+    <style name="Widget.Ocean.Button.Secondary" parent="Widget.Ocean.Button.Base">
+        <!-- Outline secondary button -->
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="strokeColor">@color/ocean_secondary</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/ocean_secondary</item>
+    </style>
+
+    <!-- Inputs -->
     <style name="Widget.Ocean.TextInputLayout" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
         <item name="boxBackgroundColor">@color/ocean_surface</item>
         <item name="boxStrokeColor">@color/ocean_border</item>
@@ -45,16 +72,53 @@
         <item name="cornerSize">14dp</item>
     </style>
 
+    <!-- Toolbar -->
+    <style name="Widget.Ocean.Toolbar" parent="Widget.MaterialComponents.Toolbar">
+        <item name="titleTextAppearance">@style/TextAppearance.Ocean.ToolbarTitle</item>
+        <item name="subtitleTextAppearance">@style/TextAppearance.Ocean.ToolbarSubtitle</item>
+    </style>
+
+    <!-- Typography scale -->
+    <style name="TextAppearance.Ocean.ToolbarTitle" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textColor">@color/ocean_text</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.ToolbarSubtitle" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textColor">@color/ocean_muted_text</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
     <style name="TextAppearance.Ocean.Title" parent="TextAppearance.MaterialComponents.Headline6">
         <item name="android:textColor">@color/ocean_text</item>
+        <item name="android:textSize">20sp</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Subtitle" parent="TextAppearance.MaterialComponents.Subtitle1">
+        <item name="android:textColor">@color/ocean_text</item>
+        <item name="android:textSize">16sp</item>
     </style>
 
     <style name="TextAppearance.Ocean.Body" parent="TextAppearance.MaterialComponents.Body1">
         <item name="android:textColor">@color/ocean_text</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Caption" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textColor">@color/ocean_muted_text</item>
+        <item name="android:textSize">12sp</item>
     </style>
 
     <style name="TextAppearance.Ocean.Muted" parent="TextAppearance.MaterialComponents.Body2">
         <item name="android:textColor">@color/ocean_muted_text</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Price" parent="TextAppearance.MaterialComponents.Subtitle1">
+        <item name="android:textColor">@color/ocean_price</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">16sp</item>
     </style>
 
 </resources>

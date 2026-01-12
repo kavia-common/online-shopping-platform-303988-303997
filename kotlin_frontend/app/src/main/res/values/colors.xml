@@ -14,6 +14,16 @@
     <color name="ocean_border">#E5E7EB</color>
     <color name="ocean_muted_text">#6B7280</color>
 
+    <!-- UI utility colors -->
+    <color name="ocean_on_primary">#FFFFFF</color>
+    <color name="ocean_on_secondary">#111827</color>
+
+    <!-- Subtle pressed/ripple overlay (tinted by primary) -->
+    <color name="ocean_primary_12">#1F2563EB</color>
+
+    <!-- Price emphasis (amber-leaning but readable on white) -->
+    <color name="ocean_price">#B45309</color>
+
     <!-- Gradient start color (from-blue-500/10 approximation) -->
     <color name="ocean_primary_10">#1A2563EB</color>
 </resources>

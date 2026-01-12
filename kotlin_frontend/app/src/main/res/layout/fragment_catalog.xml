@@ -27,26 +27,26 @@
         android:id="@+id/filters_panel"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:background="@drawable/bg_surface_rounded"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="16dp"
         app:layout_constraintTop_toBottomOf="@id/search_input_layout"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintWidth_percent="0.38">
 
         <TextView
+            style="@style/TextAppearance.Ocean.Subtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            style="@style/TextAppearance.Ocean.Title"
             android:text="@string/filters_title" />
 
         <TextView
+            style="@style/TextAppearance.Ocean.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            style="@style/TextAppearance.Ocean.Muted"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             android:text="@string/filter_category" />
 
         <LinearLayout
@@ -57,25 +57,26 @@
             android:orientation="vertical" />
 
         <TextView
+            style="@style/TextAppearance.Ocean.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            style="@style/TextAppearance.Ocean.Muted"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
             android:text="@string/filter_price" />
 
         <TextView
             android:id="@+id/tv_price_hint"
+            style="@style/TextAppearance.Ocean.Muted"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            style="@style/TextAppearance.Ocean.Muted"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:text="$0 - $999 (mock)" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_go_to_cart"
+            style="@style/Widget.Ocean.Button.Secondary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="16dp"
             android:text="@string/go_to_cart" />
 
     </LinearLayout>
@@ -84,7 +85,9 @@
         android:id="@+id/rv_products"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="16dp"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp"
         app:layout_constraintTop_toTopOf="@id/filters_panel"
         app:layout_constraintBottom_toBottomOf="@id/filters_panel"
         app:layout_constraintStart_toEndOf="@id/filters_panel"

@@ -3,9 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/toolbar"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="?attr/actionBarSize"
     android:background="@color/ocean_surface"
-    android:elevation="2dp"
+    android:elevation="4dp"
+    app:title="@string/app_name"
+    app:titleTextAppearance="@style/TextAppearance.Ocean.ToolbarTitle"
+    app:subtitleTextAppearance="@style/TextAppearance.Ocean.ToolbarSubtitle"
     app:titleTextColor="@color/ocean_text"
-    app:subtitleTextColor="@color/ocean_muted_text"
-    app:title="@string/app_name" />
+    app:subtitleTextColor="@color/ocean_muted_text" />

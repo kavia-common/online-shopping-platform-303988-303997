@@ -31,6 +31,8 @@
     <!-- Accessibility -->
     <string name="cd_recent_search_chip">Recent search: %1$s</string>
     <string name="cd_clear_recent_searches">Clear recent searches</string>
+    <string name="cd_catalog_search">Search the catalog</string>
+    <string name="cd_catalog_search_icon">Search</string>
 
     <string name="add_to_cart">Add to Cart</string>
     <string name="go_to_cart">Go to Cart</string>

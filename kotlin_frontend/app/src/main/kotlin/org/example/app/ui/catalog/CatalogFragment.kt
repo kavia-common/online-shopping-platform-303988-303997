@@ -387,15 +387,15 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                 setTextColor(requireContext().getColor(R.color.ocean_text))
                 textSize = 14f
 
-                // Ensure 48dp touch target. bg_chip_outline has padding for visuals,
-                // but minHeight ensures accessibility target size.
+                // Accessibility: ensure 48dp touch target (height) while keeping visual padding.
+                // bg_chip_outline already provides 12dp/8dp padding; minHeight ensures target size.
                 minHeight = dpToPx(48)
-                setPadding(dpToPx(12))
 
-                contentDescription = getString(R.string.cd_recent_search_chip, query)
-
+                // Improve usability/feedback: make sure stateful click feedback is shown.
                 isClickable = true
                 isFocusable = true
+
+                contentDescription = getString(R.string.cd_recent_search_chip, query)
 
                 setOnClickListener {
                     applyRecentSearch(query)
@@ -405,8 +405,10 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            if (index > 0) lp.marginStart = dpToPx(8)
+            ).apply {
+                // 8dp grid spacing between chips.
+                if (index > 0) marginStart = dpToPx(8)
+            }
             chip.layoutParams = lp
 
             recentSearchesContainer.addView(chip)

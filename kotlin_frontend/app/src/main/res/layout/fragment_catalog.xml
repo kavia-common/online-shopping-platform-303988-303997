@@ -11,24 +11,32 @@
         android:id="@+id/search_input_layout"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:contentDescription="@string/cd_catalog_search"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:startIconDrawable="@android:drawable/ic_menu_search"
+        app:startIconContentDescription="@string/cd_catalog_search_icon">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/et_search"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/search_hint"
-            android:inputType="text" />
+            android:imeOptions="actionSearch"
+            android:importantForAutofill="yes"
+            android:inputType="text"
+            android:minHeight="48dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Recent searches: non-intrusive row just under search -->
+    <!-- Recent searches: shown only when there are items -->
     <LinearLayout
         android:id="@+id/recent_searches_row"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone"
@@ -41,7 +49,8 @@
             style="@style/TextAppearance.Ocean.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/recent_searches" />
+            android:text="@string/recent_searches"
+            android:textStyle="bold" />
 
         <View
             android:layout_width="0dp"
@@ -55,6 +64,9 @@
             android:layout_height="48dp"
             android:contentDescription="@string/cd_clear_recent_searches"
             android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
             android:text="@string/clear" />
     </LinearLayout>
 
@@ -75,6 +87,8 @@
             android:id="@+id/recent_searches_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingTop="4dp"
             android:paddingBottom="4dp" />
@@ -97,13 +111,14 @@
             style="@style/TextAppearance.Ocean.Subtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/filters_title" />
+            android:text="@string/filters_title"
+            android:textStyle="bold" />
 
         <TextView
             style="@style/TextAppearance.Ocean.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:text="@string/filter_category" />
 
         <LinearLayout
@@ -123,8 +138,9 @@
         <Spinner
             android:id="@+id/spinner_sort"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp" />
 
         <TextView
             style="@style/TextAppearance.Ocean.Caption"

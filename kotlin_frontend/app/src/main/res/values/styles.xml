@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.OceanProfessional" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Material color system -->
+        <item name="colorPrimary">@color/ocean_primary</item>
+        <item name="colorPrimaryVariant">@color/ocean_primary</item>
+        <item name="colorSecondary">@color/ocean_secondary</item>
+        <item name="colorSecondaryVariant">@color/ocean_secondary</item>
+
+        <item name="colorError">@color/ocean_error</item>
+
+        <item name="android:colorBackground">@color/ocean_background</item>
+        <item name="colorSurface">@color/ocean_surface</item>
+        <item name="android:textColorPrimary">@color/ocean_text</item>
+        <item name="android:textColorSecondary">@color/ocean_muted_text</item>
+
+        <!-- Default component styling -->
+        <item name="materialButtonStyle">@style/Widget.Ocean.Button</item>
+        <item name="textInputStyle">@style/Widget.Ocean.TextInputLayout</item>
+        <item name="android:statusBarColor">@color/ocean_primary</item>
+    </style>
+
+    <style name="Widget.Ocean.Button" parent="Widget.MaterialComponents.Button">
+        <item name="cornerRadius">14dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:minHeight">48dp</item>
+    </style>
+
+    <style name="Widget.Ocean.TextInputLayout" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxBackgroundColor">@color/ocean_surface</item>
+        <item name="boxStrokeColor">@color/ocean_border</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="hintTextColor">@color/ocean_muted_text</item>
+
+        <!-- Use MaterialComponents shape system for rounded corners -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Ocean.Rounded14</item>
+    </style>
+
+    <style name="ShapeAppearance.Ocean.Rounded14" parent="ShapeAppearance.MaterialComponents.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">14dp</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Title" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textColor">@color/ocean_text</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Body" parent="TextAppearance.MaterialComponents.Body1">
+        <item name="android:textColor">@color/ocean_text</item>
+    </style>
+
+    <style name="TextAppearance.Ocean.Muted" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textColor">@color/ocean_muted_text</item>
+    </style>
+
+</resources>

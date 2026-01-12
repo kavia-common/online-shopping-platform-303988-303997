@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/home_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_ocean"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/home_headline"
+        style="@style/TextAppearance.Ocean.Title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/home_headline"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/home_subtitle"
+        style="@style/TextAppearance.Ocean.Muted"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/home_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/home_headline"
+        app:layout_constraintStart_toStartOf="@id/home_headline"
+        app:layout_constraintEnd_toEndOf="@id/home_headline" />
+
+    <LinearLayout
+        android:id="@+id/home_cta_panel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_surface_rounded"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@id/home_subtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_browse_catalog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/browse_catalog" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_view_cart"
+            style="@style/Widget.Ocean.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/view_cart"
+            app:backgroundTint="@color/ocean_secondary"
+            android:textColor="@color/ocean_text" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

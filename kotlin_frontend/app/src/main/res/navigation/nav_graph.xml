@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="org.example.app.ui.home.HomeFragment"
+        android:label="@string/title_home">
+        <action
+            android:id="@+id/action_home_to_catalog"
+            app:destination="@id/catalogFragment" />
+        <action
+            android:id="@+id/action_home_to_cart"
+            app:destination="@id/cartFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/catalogFragment"
+        android:name="org.example.app.ui.catalog.CatalogFragment"
+        android:label="@string/title_catalog">
+        <action
+            android:id="@+id/action_catalog_to_productDetails"
+            app:destination="@id/productDetailsFragment" />
+        <action
+            android:id="@+id/action_catalog_to_cart"
+            app:destination="@id/cartFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/productDetailsFragment"
+        android:name="org.example.app.ui.product.ProductDetailsFragment"
+        android:label="@string/title_product_details">
+        <argument
+            android:name="productId"
+            app:argType="string" />
+        <action
+            android:id="@+id/action_productDetails_to_cart"
+            app:destination="@id/cartFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/cartFragment"
+        android:name="org.example.app.ui.cart.CartFragment"
+        android:label="@string/title_cart" />
+</navigation>

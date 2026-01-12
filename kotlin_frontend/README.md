@@ -81,10 +81,20 @@ The cart supports applying/removing a **coupon code**:
   - Total (subtotal - discount; tax is currently a placeholder)
 
 #### Backend validation behavior
-When an identity email is available, the app will **attempt** to validate/apply the coupon with backend endpoints if they exist:
-- `POST /api/coupons/validate?email=...` (body: `{ "code": "..." }`)
-- `POST /api/carts/coupon?email=...` (body: `{ "code": "..." }`)
-- `DELETE /api/carts/coupon?email=...`
+When an identity email is available, the app will **attempt** to validate/apply the coupon with backend endpoints if they exist.
+
+**Important:** Coupon requests now include the **current cart line items** so the backend can enforce:
+- minimum subtotal rules
+- category-specific eligibility
+- usage limits
+
+Endpoints:
+- `POST /api/coupons/validate?email=...`  
+  body: `{ "code": "...", "items": [{ "productId": "...", "category": "...", "unitPrice": 12.34, "qty": 2 }] }`
+- `POST /api/carts/coupon?email=...`  
+  body: `{ "code": "...", "items": [...] }`
+- `DELETE /api/carts/coupon?email=...`  
+  typically without a body; if supported, the app may send `{ "code": "...", "items": [...] }`
 
 If these endpoints are not present yet (404) or network fails, the app falls back gracefully:
 - Coupon can remain applied as **Pending server validation** (UI continues to show totals)

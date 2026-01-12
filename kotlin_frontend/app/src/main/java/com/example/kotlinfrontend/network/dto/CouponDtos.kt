@@ -3,10 +3,49 @@ package com.example.kotlinfrontend.network.dto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+/**
+ * Coupon DTOs.
+ *
+ * Note: The backend now supports sending cart line items for coupon validation/apply/remove
+ * so it can enforce min subtotal, category eligibility, and usage limits.
+ *
+ * We keep all new fields optional to remain compatible with older backends that ignore them.
+ */
+
+@JsonClass(generateAdapter = true)
+data class CartLineItemDto(
+    @Json(name = "productId")
+    val productId: String,
+    @Json(name = "category")
+    val category: String,
+    @Json(name = "unitPrice")
+    val unitPrice: Double,
+    @Json(name = "qty")
+    val qty: Int
+)
+
 @JsonClass(generateAdapter = true)
 data class CouponApplyRequestDto(
     @Json(name = "code")
-    val code: String
+    val code: String,
+    /**
+     * Optional line items so backend can compute eligible subtotal by category
+     * and enforce coupon rules.
+     */
+    @Json(name = "items")
+    val items: List<CartLineItemDto>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CouponRemoveRequestDto(
+    /**
+     * Optional (some backends support removal by just email/cart identity and ignore the body).
+     * Keeping it nullable to support DELETE with/without body depending on backend routing.
+     */
+    @Json(name = "code")
+    val code: String? = null,
+    @Json(name = "items")
+    val items: List<CartLineItemDto>? = null
 )
 
 @JsonClass(generateAdapter = true)

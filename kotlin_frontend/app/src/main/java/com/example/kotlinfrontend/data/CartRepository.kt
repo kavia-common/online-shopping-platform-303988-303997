@@ -12,7 +12,9 @@ import com.example.kotlinfrontend.network.CartApi
 import com.example.kotlinfrontend.network.dto.CartDto
 import com.example.kotlinfrontend.network.dto.CartItemMutationRequestDto
 import com.example.kotlinfrontend.network.dto.CartUpdateQuantityRequestDto
+import com.example.kotlinfrontend.network.dto.CartLineItemDto
 import com.example.kotlinfrontend.network.dto.CouponApplyRequestDto
+import com.example.kotlinfrontend.network.dto.CouponRemoveRequestDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import retrofit2.HttpException
+import java.io.IOException
 import java.util.Locale
 
 /**
@@ -40,6 +44,12 @@ import java.util.Locale
  * - Coupon is persisted separately (CouponStore) so it survives process death.
  * - Totals are recomputed whenever items or coupon change.
  * - We attempt backend validation/apply/remove when identity exists; otherwise local-only validation is used.
+ *
+ * New (server-side coupon rules):
+ * - Coupon validate/apply/remove now sends current cart line items:
+ *   productId, category, unitPrice, qty
+ * - This enables backend to enforce min subtotal, category eligibility, and usage limits.
+ * - All new request fields are optional; we keep graceful fallback if backend ignores them.
  */
 class CartRepository(context: Context) {
 
@@ -266,9 +276,9 @@ class CartRepository(context: Context) {
          * Behavior:
          * - Local optimistic application:
          *   - Non-empty / basic format validation
-         *   - If no backend identity or backend endpoint missing: mark as PendingServerValidation or Valid (local-only)
+         *   - If no backend identity or backend endpoint missing: mark as PendingServerValidation
          * - If backend validation/apply exists and identity is available:
-         *   - Attempt validate/apply; rollback on failure.
+         *   - Attempt validate/apply; keep coupon but mark Invalid on rule violations.
          */
         val code = normalizeCouponCode(codeRaw)
         if (code.isBlank()) {
@@ -289,12 +299,7 @@ class CartRepository(context: Context) {
 
             mutex.withLock {
                 // Optimistic: apply coupon immediately using locally derived coupon metadata (fallback).
-                val initialState = if (_activeEmail.value.isNullOrBlank()) {
-                    CouponValidationState.PendingServerValidation
-                } else {
-                    CouponValidationState.PendingServerValidation
-                }
-                setCouponLocked(coupon = localCoupon, state = initialState)
+                setCouponLocked(coupon = localCoupon, state = CouponValidationState.PendingServerValidation)
 
                 // If local constraints fail, treat as invalid immediately.
                 val localConstraintError = validateCouponAgainstLocalConstraints(localCoupon, currentSubtotal)
@@ -306,15 +311,14 @@ class CartRepository(context: Context) {
 
             val email = _activeEmail.value
             if (email.isNullOrBlank()) {
-                // No identity => local-only. We consider this "Valid" locally (but pending server sync).
+                // No identity => local-only (still pending server validation).
                 mutex.withLock {
-                    // Keep coupon, but signal pending server validation.
-                    _couponValidationState.value = CouponValidationState.PendingServerValidation
+                    if (_coupon.value != null) _couponValidationState.value = CouponValidationState.PendingServerValidation
                 }
                 return@launch
             }
 
-            // Backend best effort: validate then apply.
+            // Backend best effort: validate then apply, sending line items.
             try {
                 val isValid = validateCouponWithBackendBestEffort(email = email, code = code)
                 if (!isValid) {
@@ -322,17 +326,26 @@ class CartRepository(context: Context) {
                     return@launch
                 }
 
-                // Attempt applyCoupon endpoint; if missing, we still accept locally.
+                // Attempt applyCoupon endpoint; if missing, we still accept locally (pending server).
                 try {
-                    cartApi.applyCoupon(email = email, body = CouponApplyRequestDto(code = code))
-                    // Even if backend cart DTO doesn't contain coupon, we keep local coupon and mark valid.
-                    mutex.withLock { _couponValidationState.value = CouponValidationState.Valid }
+                    val cart = cartApi.applyCoupon(
+                        email = email,
+                        body = CouponApplyRequestDto(code = code, items = buildCouponLineItemsLockedUnsafe())
+                    )
+                    // Reconcile items/totals from server cart if provided.
+                    reconcileFromCartDto(cart)
+
+                    mutex.withLock {
+                        // Even if backend cart DTO doesn't contain coupon, we keep local coupon and mark valid.
+                        _couponValidationState.value = CouponValidationState.Valid
+                        recomputeTotalsLocked()
+                    }
                 } catch (tApply: Throwable) {
                     // Endpoint might not exist yet; treat as soft-failure and keep local coupon.
                     mutex.withLock { _couponValidationState.value = CouponValidationState.PendingServerValidation }
                 }
             } catch (t: Throwable) {
-                // Rollback on hard failures (e.g. network) to match "rollback on failure" request.
+                // Rollback on hard failures (e.g. network)
                 mutex.withLock {
                     _coupon.value = previousCoupon
                     _couponValidationState.value = previousState
@@ -363,10 +376,20 @@ class CartRepository(context: Context) {
             if (email.isNullOrBlank()) return@launch
 
             try {
+                // Prefer body variant (supports new line items) but gracefully fallback.
                 try {
-                    cartApi.removeCoupon(email = email)
+                    val cart = cartApi.removeCouponWithBody(
+                        email = email,
+                        body = CouponRemoveRequestDto(
+                            code = previousCoupon?.code,
+                            items = buildCouponLineItemsLockedUnsafe()
+                        )
+                    )
+                    reconcileFromCartDto(cart)
                 } catch (_: Throwable) {
-                    // Optional endpoint might not exist; ignore.
+                    // Optional endpoint might not exist or not accept body; fallback.
+                    val cart = cartApi.removeCoupon(email = email)
+                    reconcileFromCartDto(cart)
                 }
             } catch (t: Throwable) {
                 mutex.withLock {
@@ -511,11 +534,17 @@ class CartRepository(context: Context) {
     private suspend fun validateCouponWithBackendBestEffort(email: String, code: String): Boolean {
         // Attempt backend validation. If endpoint missing, keep pending state (graceful fallback).
         return try {
-            val resp = cartApi.validateCoupon(email = email, body = CouponApplyRequestDto(code = code))
+            val resp = cartApi.validateCoupon(
+                email = email,
+                body = CouponApplyRequestDto(code = code, items = buildCouponLineItemsLockedUnsafe())
+            )
             if (!resp.valid) {
+                val msg = resp.message ?: "Coupon can't be applied."
                 mutex.withLock {
-                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(resp.message ?: "Invalid coupon."))
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(msg))
                 }
+                // Surface rule violations (min subtotal/category/usage limit) explicitly.
+                emitError(msg, CartErrorEvent.Operation.APPLY_COUPON, RuntimeException(msg))
                 false
             } else {
                 val mappedCoupon = resp.coupon?.toDomainCouponFallback(code)
@@ -530,7 +559,7 @@ class CartRepository(context: Context) {
                 }
                 true
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Endpoint not present or network issue: keep pending.
             mutex.withLock {
                 if (_coupon.value != null) {
@@ -538,6 +567,26 @@ class CartRepository(context: Context) {
                 }
             }
             true
+        }
+    }
+
+    private fun buildCouponLineItemsLockedUnsafe(): List<CartLineItemDto> {
+        // Safe enough because StateFlow read is atomic; slight staleness is acceptable for coupon enforcement.
+        // Backend remains source of truth and will reject if cart differs.
+        val snapshot = _items.value
+        if (snapshot.isEmpty()) return emptyList()
+
+        return snapshot.mapNotNull { item ->
+            val category = item.category.trim().ifBlank { "Uncategorized" }
+            val qty = item.quantity
+            if (qty <= 0) return@mapNotNull null
+
+            CartLineItemDto(
+                productId = item.productId,
+                category = category,
+                unitPrice = item.price,
+                qty = qty
+            )
         }
     }
 

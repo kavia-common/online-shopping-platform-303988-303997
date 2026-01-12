@@ -4,10 +4,12 @@ import com.example.kotlinfrontend.network.dto.CartDto
 import com.example.kotlinfrontend.network.dto.CartItemMutationRequestDto
 import com.example.kotlinfrontend.network.dto.CartUpdateQuantityRequestDto
 import com.example.kotlinfrontend.network.dto.CouponApplyRequestDto
+import com.example.kotlinfrontend.network.dto.CouponRemoveRequestDto
 import com.example.kotlinfrontend.network.dto.CouponValidationResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Query
@@ -71,8 +73,9 @@ interface CartApi {
     /**
      * Apply a coupon to the current cart.
      *
-     * Optional hook: backend may expose this.
-     * Proposed endpoint (per task): POST /api/carts/coupon?email=...
+     * Backend may now enforce coupon rules using the provided line items.
+     *
+     * Endpoint: POST /api/carts/coupon?email=...
      */
     @POST("/api/carts/coupon")
     suspend fun applyCoupon(
@@ -83,8 +86,9 @@ interface CartApi {
     /**
      * Remove coupon from current cart.
      *
-     * Optional hook: backend may expose this.
-     * Proposed endpoint (per task): DELETE /api/carts/coupon?email=...
+     * Preferred endpoint: DELETE /api/carts/coupon?email=...
+     * Some backends may optionally accept a body; Retrofit's @DELETE does not support a body,
+     * so we provide both variants.
      */
     @DELETE("/api/carts/coupon")
     suspend fun removeCoupon(
@@ -92,10 +96,23 @@ interface CartApi {
     ): CartDto
 
     /**
+     * Remove coupon with an optional request body.
+     *
+     * Used when backend requires line items in remove request to re-check constraints (rare),
+     * or when it expects coupon code in body for removal.
+     */
+    @HTTP(method = "DELETE", path = "/api/carts/coupon", hasBody = true)
+    suspend fun removeCouponWithBody(
+        @Query("email") email: String?,
+        @Body body: CouponRemoveRequestDto
+    ): CartDto
+
+    /**
      * Validate a coupon code.
      *
-     * Optional hook: backend may expose this.
-     * Proposed endpoint: POST /api/coupons/validate?email=...
+     * Backend may now enforce coupon rules using the provided line items.
+     *
+     * Endpoint: POST /api/coupons/validate?email=...
      */
     @POST("/api/coupons/validate")
     suspend fun validateCoupon(

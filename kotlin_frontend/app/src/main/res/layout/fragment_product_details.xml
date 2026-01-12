@@ -30,12 +30,35 @@
                 android:background="@drawable/bg_chip_outline"
                 android:contentDescription="@string/title_product_details" />
 
-            <TextView
-                android:id="@+id/tv_name"
-                style="@style/TextAppearance.Ocean.Title"
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/title_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" />
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:id="@+id/tv_name"
+                    style="@style/TextAppearance.Ocean.Title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintEnd_toStartOf="@id/btn_favorite" />
+
+                <ImageButton
+                    android:id="@+id/btn_favorite"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/cd_add_to_favorites"
+                    android:importantForAccessibility="yes"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_heart_outline"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <TextView
                 android:id="@+id/tv_category"

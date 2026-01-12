@@ -8,7 +8,8 @@ import androidx.lifecycle.MutableLiveData
  * Singleton repository providing:
  * - Mock catalog/categories
  * - Observable cart state (LiveData) shared across fragments
- * - Lightweight local persistence for cart + recent searches
+ * - Lightweight local persistence for cart + recent searches + catalog prefs
+ * - Favorites (wishlist) stored locally (SharedPreferences) and exposed via LiveData
  */
 object ShopRepository {
 
@@ -32,6 +33,10 @@ object ShopRepository {
 
     private val cartState = MutableLiveData<Map<String, Int>>(emptyMap())
 
+    // Favorites
+    private val favoriteIds: MutableSet<String> = linkedSetOf()
+    private val favoritesState = MutableLiveData<Set<String>>(emptySet())
+
     // Local persistence (initialized from Application context).
     private var localStore: LocalStore? = null
     private var isInitialized: Boolean = false
@@ -46,7 +51,8 @@ object ShopRepository {
      */
     data class CatalogPreferences(
         val selectedCategoryId: String?,
-        val sortKey: String
+        val sortKey: String,
+        val favoritesOnly: Boolean
     )
 
     // PUBLIC_INTERFACE
@@ -84,6 +90,11 @@ object ShopRepository {
         // Restore recent searches for catalog recall.
         recentSearches.clear()
         recentSearches.addAll(localStore?.readRecentSearches().orEmpty())
+
+        // Restore favorites.
+        favoriteIds.clear()
+        favoriteIds.addAll(localStore?.readFavoriteProductIds().orEmpty())
+        favoritesState.value = favoriteIds.toSet()
 
         isInitialized = true
     }
@@ -170,36 +181,80 @@ object ShopRepository {
     }
 
     /**
+     * Returns true when [productId] is currently in the favorites set.
+     *
+     * This is a synchronous check intended for adapters/binding.
+     */
+    // PUBLIC_INTERFACE
+    fun isFavorite(productId: String): Boolean = favoriteIds.contains(productId)
+
+    /**
+     * Toggles favorite state for the given product ID (add/remove), persists, and updates observers.
+     */
+    // PUBLIC_INTERFACE
+    fun toggleFavorite(productId: String) {
+        if (productId.isBlank()) return
+
+        if (favoriteIds.contains(productId)) {
+            favoriteIds.remove(productId)
+        } else {
+            favoriteIds.add(productId)
+        }
+        publishFavorites()
+    }
+
+    /**
+     * Returns a snapshot of favorite IDs.
+     */
+    // PUBLIC_INTERFACE
+    fun getFavorites(): Set<String> = favoriteIds.toSet()
+
+    /**
+     * Observe favorites as a set of product IDs. UI can map IDs -> products as needed.
+     */
+    // PUBLIC_INTERFACE
+    fun observeFavorites(): LiveData<Set<String>> = favoritesState
+
+    /**
      * Loads persisted catalog filter/sort preferences.
      *
-     * If nothing has been stored yet, returns defaults (All categories + RELEVANCE sort).
+     * If nothing has been stored yet, returns defaults (All categories + RELEVANCE sort + favoritesOnly=false).
      */
     // PUBLIC_INTERFACE
     fun loadCatalogPreferences(defaultSortKey: String = "RELEVANCE"): CatalogPreferences {
         val store = localStore
         val categoryId = store?.readCatalogSelectedCategoryId()
         val sortKey = store?.readCatalogSortKey() ?: defaultSortKey
+        val favoritesOnly = store?.readCatalogFavoritesOnly() ?: false
         return CatalogPreferences(
             selectedCategoryId = categoryId,
-            sortKey = sortKey
+            sortKey = sortKey,
+            favoritesOnly = favoritesOnly
         )
     }
 
     /**
      * Persists catalog filter/sort preferences.
      *
-     * This is expected to be called whenever the user changes category or sort order.
+     * This is expected to be called whenever the user changes category, sort order, or favorites-only filter.
      */
     // PUBLIC_INTERFACE
     fun saveCatalogPreferences(prefs: CatalogPreferences) {
         localStore?.writeCatalogSelectedCategoryId(prefs.selectedCategoryId)
         localStore?.writeCatalogSortKey(prefs.sortKey)
+        localStore?.writeCatalogFavoritesOnly(prefs.favoritesOnly)
     }
 
     private fun publishCart() {
         cartState.value = cartMap.toMap()
         // Persist every mutation. If initialize() hasn't been called yet, this is a no-op.
         localStore?.writeCart(cartMap)
+    }
+
+    private fun publishFavorites() {
+        favoritesState.value = favoriteIds.toSet()
+        // Persist every mutation. If initialize() hasn't been called yet, this is a no-op.
+        localStore?.writeFavoriteProductIds(favoriteIds)
     }
 
     data class CartItem(

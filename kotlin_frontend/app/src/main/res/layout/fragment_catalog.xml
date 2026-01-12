@@ -147,6 +147,23 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:text="@string/filter_favorites" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_favorites_only"
+            style="@style/Widget.Ocean.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:text="@string/favorites_only_off"
+            android:contentDescription="@string/cd_favorites_only_toggle" />
+
+        <TextView
+            style="@style/TextAppearance.Ocean.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="@string/filter_price" />
 
         <TextView

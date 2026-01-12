@@ -29,6 +29,10 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
     private var selectedSortOption: SortOption = SortOption.RELEVANCE
 
+    // Optional filter: show favorites only.
+    private var favoritesOnly: Boolean = false
+    private lateinit var btnFavoritesOnly: MaterialButton
+
     private lateinit var rvProducts: RecyclerView
     private lateinit var tvEmptyResults: TextView
     private lateinit var adapter: ProductAdapter
@@ -73,6 +77,8 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         categoryContainer = view.findViewById(R.id.category_container)
         sortSpinner = view.findViewById(R.id.spinner_sort)
 
+        btnFavoritesOnly = view.findViewById(R.id.btn_favorites_only)
+
         rvProducts.layoutManager = LinearLayoutManager(requireContext())
 
         adapter = ProductAdapter { product ->
@@ -92,12 +98,21 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         // Sidebar category filters
         renderCategoryFilters(categoryContainer)
 
+        setupFavoritesOnlyToggle()
+
         view.findViewById<MaterialButton>(R.id.btn_go_to_cart).setOnClickListener {
             findNavController().navigate(R.id.action_catalog_to_cart)
         }
 
         setupDebouncedSearch()
         setupRecentSearchesUi()
+
+        // Observe favorites so we can (a) update heart states and (b) re-run filtering when favoritesOnly is enabled.
+        ShopRepository.observeFavorites().observe(viewLifecycleOwner) {
+            // Refresh list so hearts/tints match repo state.
+            // This does not change existing flows; it just updates UI state.
+            refreshProducts()
+        }
 
         // Restore last search (if any) to make search feel continuous across restarts.
         // We only pre-fill if user hasn't typed anything already.
@@ -120,6 +135,30 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         pendingSearchRunnable?.let { mainHandler.removeCallbacks(it) }
         pendingSearchRunnable = null
         super.onDestroyView()
+    }
+
+    private fun setupFavoritesOnlyToggle() {
+        updateFavoritesOnlyButton()
+
+        btnFavoritesOnly.setOnClickListener {
+            favoritesOnly = !favoritesOnly
+            if (!isRestoringCatalogPrefs) {
+                persistCatalogPreferences()
+            }
+            updateFavoritesOnlyButton()
+            refreshProducts()
+        }
+    }
+
+    private fun updateFavoritesOnlyButton() {
+        btnFavoritesOnly.text = if (favoritesOnly) {
+            getString(R.string.favorites_only_on)
+        } else {
+            getString(R.string.favorites_only_off)
+        }
+
+        // Use "selected" for state, enabling styles/tints if needed later.
+        btnFavoritesOnly.isSelected = favoritesOnly
     }
 
     private fun setupDebouncedSearch() {
@@ -278,7 +317,8 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         ShopRepository.saveCatalogPreferences(
             ShopRepository.CatalogPreferences(
                 selectedCategoryId = selectedCategoryId,
-                sortKey = selectedSortOption.name
+                sortKey = selectedSortOption.name,
+                favoritesOnly = favoritesOnly
             )
         )
     }
@@ -290,12 +330,15 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
             selectedCategoryId = prefs.selectedCategoryId
             selectedSortOption = sortKeyToSortOption(prefs.sortKey)
+            favoritesOnly = prefs.favoritesOnly
 
             // Keep the sort control in sync with persisted value.
             // setSelection(..., false) avoids an extra selection animation; listener will still be invoked on some
             // platform versions, so we guard with isRestoringCatalogPrefs to avoid re-persisting.
             val position = sortOptionToSpinnerPosition(selectedSortOption)
             sortSpinner.setSelection(position, false)
+
+            updateFavoritesOnlyButton()
         } finally {
             isRestoringCatalogPrefs = false
         }
@@ -305,8 +348,14 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         val query = searchQuery.trim()
         val hasQuery = query.isNotBlank()
 
+        val favoritesSnapshot = ShopRepository.getFavorites()
+
         return products.asSequence()
             .filter { selectedCategoryId == null || it.categoryId == selectedCategoryId }
+            .filter { product ->
+                if (!favoritesOnly) return@filter true
+                favoritesSnapshot.contains(product.id)
+            }
             .filter { product ->
                 if (!hasQuery) return@filter true
                 matchesSearch(product, query)

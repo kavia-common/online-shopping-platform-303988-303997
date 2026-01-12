@@ -113,6 +113,52 @@ internal class LocalStore(private val appContext: Context) {
         prefs.edit().putString(KEY_CATALOG_SORT_KEY, sortKey.trim()).apply()
     }
 
+    /**
+     * Reads the persisted set of favorite product IDs.
+     *
+     * Storage format is a single String in the form "p1|p2|p3".
+     * This mirrors recent-searches storage and avoids requiring a JSON library.
+     */
+    fun readFavoriteProductIds(): Set<String> {
+        val raw = prefs.getString(KEY_FAVORITES, null)?.trim().orEmpty()
+        if (raw.isBlank()) return emptySet()
+
+        return raw.split("|")
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }
+
+    /**
+     * Persists the set of favorite product IDs.
+     */
+    fun writeFavoriteProductIds(ids: Set<String>) {
+        val raw = ids
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "|")
+
+        prefs.edit().putString(KEY_FAVORITES, raw).apply()
+    }
+
+    /**
+     * Reads persisted catalog "Favorites only" filter toggle.
+     *
+     * Defaults to false when unset.
+     */
+    fun readCatalogFavoritesOnly(): Boolean {
+        return prefs.getBoolean(KEY_CATALOG_FAVORITES_ONLY, false)
+    }
+
+    /**
+     * Persists catalog "Favorites only" filter toggle.
+     */
+    fun writeCatalogFavoritesOnly(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CATALOG_FAVORITES_ONLY, enabled).apply()
+    }
+
     companion object {
         @VisibleForTesting
         internal const val PREFS_NAME = "ocean_shop_prefs"
@@ -129,5 +175,13 @@ internal class LocalStore(private val appContext: Context) {
 
         @VisibleForTesting
         internal const val KEY_CATALOG_SORT_KEY = "catalog_sort_key_v1"
+
+        // Favorites persistence
+        @VisibleForTesting
+        internal const val KEY_FAVORITES = "favorites_v1"
+
+        // Catalog "Favorites only" filter persistence
+        @VisibleForTesting
+        internal const val KEY_CATALOG_FAVORITES_ONLY = "catalog_favorites_only_v1"
     }
 }

@@ -17,6 +17,14 @@
     <string name="filter_sort">Sort</string>
     <string name="search_hint">Search products</string>
 
+    <!-- Favorites (wishlist) -->
+    <string name="filter_favorites">Favorites</string>
+    <string name="favorites_only_off">Show favorites: Off</string>
+    <string name="favorites_only_on">Show favorites: On</string>
+    <string name="cd_favorites_only_toggle">Toggle favorites-only filter</string>
+    <string name="cd_add_to_favorites">Add to favorites</string>
+    <string name="cd_remove_from_favorites">Remove from favorites</string>
+
     <string name="category_all">All</string>
 
     <string name="sort_relevance">Relevance</string>

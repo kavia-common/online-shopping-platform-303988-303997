@@ -75,11 +75,20 @@ This frontend is wired to call the Spring Boot APIs at:
 To change the base URL, edit:
 - `app/src/main/java/com/example/kotlinfrontend/network/ApiConfig.kt`
 
-## Orders screen (minimal)
+## Orders screen (filters + chips)
 
 From the Products screen:
 - Tap **Create order (sample)** to create an order using a fixed payload (for end-to-end wiring).
 - Tap **Orders** to open the order history screen (Paging 3 list).
+
+### Filters (polished UX)
+The Orders screen now mirrors the Product list paging UX:
+- **Status filter** (choice chips): Pending, Paid, Shipped, Delivered, Cancelled (or Any).
+- **Customer email filter** (optional): typing is **debounced** (~300ms) before it affects paging.
+- **Date range filter** (optional): simple **From/To** date pickers (yyyy-MM-dd).
+
+Active filters appear as **removable chips** under the controls, and **Clear all** resets status/email/date filters.
+Pull-to-refresh uses `PagingDataAdapter.refresh()` and will update smoothly without full-screen flicker.
 
 ### Backend verification via curl (examples)
 

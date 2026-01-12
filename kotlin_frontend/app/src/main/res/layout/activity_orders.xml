@@ -15,27 +15,203 @@
         android:elevation="2dp"
         android:title="Orders"
         android:titleTextColor="@color/ocean_text"
-        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"/>
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Filters header (mirrors product list polish pattern) -->
+    <LinearLayout
+        android:id="@+id/filtersContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/ocean_surface"
+        android:elevation="2dp"
+        android:orientation="vertical"
+        android:padding="12dp"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar">
+
+        <!-- Status filter -->
+        <TextView
+            android:id="@+id/statusLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Status"
+            android:textColor="@color/ocean_text"
+            android:textStyle="bold" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/statusChipGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:selectionRequired="false"
+            app:singleSelection="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusAny"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Any" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusPending"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pending" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusPaid"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Paid" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusShipped"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Shipped" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusDelivered"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Delivered" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStatusCancelled"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancelled" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <!-- Email filter -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/emailInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="Customer email (optional)"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="14dp"
+            app:boxCornerRadiusBottomStart="14dp"
+            app:boxCornerRadiusTopEnd="14dp"
+            app:boxCornerRadiusTopStart="14dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/emailEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="actionSearch"
+                android:inputType="textEmailAddress"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Date range (simple pickers) -->
+        <LinearLayout
+            android:id="@+id/dateRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dateFromButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="40dp"
+                android:text="From" />
+
+            <Space
+                android:layout_width="10dp"
+                android:layout_height="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dateToButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="40dp"
+                android:text="To" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/clearAllButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                android:text="Clear all" />
+        </LinearLayout>
+
+        <!-- Active filter chips -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/activeFiltersChipGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:singleLine="false" />
+
+        <!-- Inline refresh indicator: visible when refresh is loading but list already has items -->
+        <LinearLayout
+            android:id="@+id/inlineProgressContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:id="@+id/inlineProgress"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="Updating results…"
+                android:textColor="@color/ocean_text" />
+        </LinearLayout>
+
+    </LinearLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipeRefresh"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/filtersContainer">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:padding="12dp"/>
+            android:padding="12dp" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <!-- Fullscreen initial loading -->
     <LinearLayout
         android:id="@+id/fullscreenLoading"
         android:layout_width="0dp"
@@ -43,23 +219,24 @@
         android:gravity="center"
         android:orientation="vertical"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/filtersContainer">
 
         <ProgressBar
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:layout_height="wrap_content" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Loading orders…"
-            android:textColor="@color/ocean_text"/>
+            android:textColor="@color/ocean_text" />
     </LinearLayout>
 
+    <!-- Fullscreen error (initial load) -->
     <LinearLayout
         android:id="@+id/fullscreenError"
         android:layout_width="0dp"
@@ -68,12 +245,13 @@
         android:orientation="vertical"
         android:padding="24dp"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/filtersContainer">
 
         <ImageView
+            android:id="@+id/errorIllustration"
             android:layout_width="180dp"
             android:layout_height="180dp"
             android:contentDescription="Error illustration"
@@ -87,9 +265,10 @@
             android:text="Something went wrong."
             android:textColor="@color/ocean_error"
             android:textSize="16sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/errorSubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -102,9 +281,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="Retry"/>
+            android:text="Retry" />
     </LinearLayout>
 
+    <!-- Empty state -->
     <LinearLayout
         android:id="@+id/fullscreenEmpty"
         android:layout_width="0dp"
@@ -113,32 +293,43 @@
         android:orientation="vertical"
         android:padding="24dp"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/filtersContainer">
 
         <ImageView
+            android:id="@+id/emptyIllustration"
             android:layout_width="180dp"
             android:layout_height="180dp"
             android:contentDescription="Empty orders illustration"
             android:src="@drawable/illustration_empty_results" />
 
         <TextView
+            android:id="@+id/emptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="No orders yet."
+            android:text="No orders found."
             android:textColor="@color/ocean_text"
             android:textSize="16sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/emptySubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Create an order from the Products screen."
-            android:textColor="@color/ocean_text"/>
+            android:text="Try adjusting your filters."
+            android:textColor="@color/ocean_text" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyClearFiltersButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Clear filters" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -12,9 +12,14 @@ import com.example.kotlinfrontend.model.Order
 import com.example.kotlinfrontend.model.OrderStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class OrderViewModel : ViewModel() {
@@ -23,21 +28,49 @@ class OrderViewModel : ViewModel() {
 
     private val pageSize = 20
 
-    private val _filters = MutableStateFlow(OrderRepository.OrderFilters())
-    val filters: StateFlow<OrderRepository.OrderFilters> = _filters.asStateFlow()
+    // Filter states (kept separate so we can debounce only the email query).
+    private val _status = MutableStateFlow<OrderStatus?>(null)
+    private val _emailQuery = MutableStateFlow("")
+    private val _dateFrom = MutableStateFlow<String?>(null) // yyyy-MM-dd (simple and backend-friendly)
+    private val _dateTo = MutableStateFlow<String?>(null)   // yyyy-MM-dd
 
-    private val _lastCreatedOrderId = MutableStateFlow<String?>(null)
-    val lastCreatedOrderId: StateFlow<String?> = _lastCreatedOrderId.asStateFlow()
+    val status: StateFlow<OrderStatus?> = _status.asStateFlow()
+    val emailQuery: StateFlow<String> = _emailQuery.asStateFlow()
+    val dateFrom: StateFlow<String?> = _dateFrom.asStateFlow()
+    val dateTo: StateFlow<String?> = _dateTo.asStateFlow()
 
-    private val _singleOrder = MutableStateFlow<Order?>(null)
-    val singleOrder: StateFlow<Order?> = _singleOrder.asStateFlow()
+    // Debounce only email typing; other filters apply immediately.
+    private val debouncedEmail = _emailQuery
+        .debounce(300)
+        .distinctUntilChanged()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val queryParams: Flow<QueryParams> = combine(
+        _status,
+        debouncedEmail,
+        _dateFrom,
+        _dateTo
+    ) { status, email, from, to ->
+        QueryParams(
+            status = status,
+            email = email.trim().ifBlank { null },
+            from = from?.trim()?.ifBlank { null },
+            to = to?.trim()?.ifBlank { null }
+        )
+    }.distinctUntilChanged()
+
+    /**
+     * Exposed to the Activity for chip rendering and empty-state messaging.
+     */
+    val activeQueryParams: StateFlow<QueryParams> =
+        queryParams.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            QueryParams(status = null, email = null, from = null, to = null)
+        )
 
     val orders: Flow<PagingData<Order>> =
-        _filters
-            .flatMapLatest { active ->
+        queryParams
+            .flatMapLatest { params ->
                 Pager(
                     config = PagingConfig(
                         pageSize = pageSize,
@@ -49,32 +82,58 @@ class OrderViewModel : ViewModel() {
                         OrderPagingSource(
                             repository = repository,
                             pageSize = pageSize,
-                            filters = active
+                            filters = OrderRepository.OrderFilters(
+                                status = params.status,
+                                email = params.email,
+                                from = params.from,
+                                to = params.to
+                            )
                         )
                     }
                 ).flow
             }
             .cachedIn(viewModelScope)
 
+    private val _lastCreatedOrderId = MutableStateFlow<String?>(null)
+    val lastCreatedOrderId: StateFlow<String?> = _lastCreatedOrderId.asStateFlow()
+
+    private val _singleOrder = MutableStateFlow<Order?>(null)
+    val singleOrder: StateFlow<Order?> = _singleOrder.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     // PUBLIC_INTERFACE
     fun setStatusFilter(status: OrderStatus?) {
         /** Update status filter for order history paging. */
-        _filters.value = _filters.value.copy(status = status)
+        _status.value = status
     }
 
     // PUBLIC_INTERFACE
-    fun setEmailFilter(email: String?) {
-        /** Update email filter for order history paging. */
-        _filters.value = _filters.value.copy(email = email?.trim()?.ifBlank { null })
+    fun setEmailFilter(email: String) {
+        /** Update email query filter (debounced). */
+        _emailQuery.value = email
     }
 
     // PUBLIC_INTERFACE
-    fun setDateRange(from: String?, to: String?) {
-        /** Update date range filter (ISO-8601 strings if backend supports). */
-        _filters.value = _filters.value.copy(
-            from = from?.trim()?.ifBlank { null },
-            to = to?.trim()?.ifBlank { null }
-        )
+    fun setDateFrom(from: String?) {
+        /** Update the "from" date (expected yyyy-MM-dd). */
+        _dateFrom.value = from?.trim()?.ifBlank { null }
+    }
+
+    // PUBLIC_INTERFACE
+    fun setDateTo(to: String?) {
+        /** Update the "to" date (expected yyyy-MM-dd). */
+        _dateTo.value = to?.trim()?.ifBlank { null }
+    }
+
+    // PUBLIC_INTERFACE
+    fun clearFilters() {
+        /** Clear all filters (status/email/date) but does not affect any other state. */
+        _status.value = null
+        _emailQuery.value = ""
+        _dateFrom.value = null
+        _dateTo.value = null
     }
 
     // PUBLIC_INTERFACE
@@ -157,5 +216,15 @@ class OrderViewModel : ViewModel() {
                 _errorMessage.value = t.message ?: "Order update failed."
             }
         }
+    }
+
+    data class QueryParams(
+        val status: OrderStatus?,
+        val email: String?,
+        val from: String?,
+        val to: String?
+    ) {
+        fun hasActiveFilters(): Boolean =
+            status != null || !email.isNullOrBlank() || !from.isNullOrBlank() || !to.isNullOrBlank()
     }
 }

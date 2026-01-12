@@ -43,6 +43,16 @@ class ProductAdapter :
     }
 
     override fun onBindViewHolder(holder: ProductViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val item = getItem(position)
+        holder.bind(item)
+
+        // Subtle appear for newly bound items (kept lightweight; avoids heavy animators).
+        if (item != null) {
+            holder.itemView.subtleAppear(
+                durationMs = holder.itemView.context.resources.getInteger(
+                    com.example.kotlinfrontend.R.integer.anim_item_appear_duration_ms
+                ).toLong()
+            )
+        }
     }
 }

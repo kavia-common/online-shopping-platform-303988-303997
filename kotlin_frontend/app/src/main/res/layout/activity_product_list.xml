@@ -136,28 +136,28 @@
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipAny"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Any"/>
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipUnder25"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Under $25"/>
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip25to40"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="$25–$40"/>
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipOver40"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
+                style="@style/Widget.KotlinFrontend.Chip.Choice"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Over $40"/>
@@ -246,17 +246,34 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent">
 
+        <ImageView
+            android:id="@+id/errorIllustration"
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:contentDescription="Error illustration"
+            android:src="@drawable/illustration_error_state" />
+
         <TextView
             android:id="@+id/errorText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
             android:text="Something went wrong."
             android:textColor="@color/ocean_error"
             android:textSize="16sp"
             android:textStyle="bold"/>
 
-        <Button
+        <TextView
+            android:id="@+id/errorSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Check your connection and try again."
+            android:textColor="@color/ocean_text" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/retryButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
@@ -277,10 +294,18 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent">
 
+        <ImageView
+            android:id="@+id/emptyIllustration"
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:contentDescription="Empty results illustration"
+            android:src="@drawable/illustration_empty_results" />
+
         <TextView
             android:id="@+id/emptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
             android:text="No products found."
             android:textColor="@color/ocean_text"
             android:textSize="16sp"
@@ -293,6 +318,14 @@
             android:layout_marginTop="8dp"
             android:text="Try adjusting your search or filters."
             android:textColor="@color/ocean_text"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyClearFiltersButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Clear filters" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

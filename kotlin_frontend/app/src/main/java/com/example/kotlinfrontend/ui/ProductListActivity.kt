@@ -6,14 +6,15 @@ import android.text.TextWatcher
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import androidx.activity.ComponentActivity
-import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
+import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.kotlinfrontend.R
 import com.example.kotlinfrontend.data.FilterPresetStore
 import com.example.kotlinfrontend.databinding.ActivityProductListBinding
 import com.example.kotlinfrontend.model.FilterPreset
@@ -53,6 +54,7 @@ class ProductListActivity : ComponentActivity() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = productAdapter.withLoadStateFooter(footer)
 
+        setupRecyclerAnimations()
         setupSearchAndFilters(productAdapter)
         setupPresetsAndClearAll(productAdapter)
 
@@ -63,6 +65,19 @@ class ProductListActivity : ComponentActivity() {
 
         binding.retryButton.setOnClickListener {
             productAdapter.retry()
+        }
+
+        binding.emptyClearFiltersButton.setOnClickListener {
+            // Clear filters only (keep query), then refresh.
+            suppressUiCallbacks = true
+            try {
+                viewModel.clearFilters()
+                binding.priceChipGroup.clearCheck()
+                binding.categorySpinner.setSelection(0)
+            } finally {
+                suppressUiCallbacks = false
+            }
+            productAdapter.refresh()
         }
 
         // Collect paging data
@@ -110,26 +125,50 @@ class ProductListActivity : ComponentActivity() {
                             productAdapter.itemCount == 0
 
                     // Fullscreen loading only for initial load when list is empty.
-                    binding.fullscreenLoading.isVisible =
-                        refresh is LoadState.Loading && productAdapter.itemCount == 0
-
-                    // Fullscreen empty state
-                    binding.fullscreenEmpty.isVisible = isListEmpty
+                    val showFullscreenLoading = refresh is LoadState.Loading && productAdapter.itemCount == 0
 
                     // Fullscreen error only for initial load error when list is empty.
                     val initialError = refresh as? LoadState.Error
-                    binding.fullscreenError.isVisible =
-                        initialError != null && productAdapter.itemCount == 0
+                    val showFullscreenError = initialError != null && productAdapter.itemCount == 0
+
+                    // Fullscreen empty state
+                    val showFullscreenEmpty = isListEmpty
+
                     if (initialError != null) {
                         binding.errorText.text = initialError.error.message ?: "Failed to load products."
                     }
 
+                    // Crossfade between containers (subtle, avoids flicker during refresh).
+                    val durationMs = animDuration(R.integer.anim_crossfade_duration_ms)
+                    crossfadeVisibility(binding.fullscreenLoading, showFullscreenLoading, durationMs)
+                    crossfadeVisibility(binding.fullscreenError, showFullscreenError, durationMs)
+                    crossfadeVisibility(binding.fullscreenEmpty, showFullscreenEmpty, durationMs)
+
                     // Keep list visible if we already have content (even if append errors happen).
-                    binding.recyclerView.isVisible =
-                        !binding.fullscreenLoading.isVisible &&
-                            !binding.fullscreenError.isVisible &&
-                            !binding.fullscreenEmpty.isVisible
+                    val showList =
+                        !showFullscreenLoading && !showFullscreenError && !showFullscreenEmpty
+
+                    crossfadeVisibility(binding.swipeRefresh, showList, durationMs)
                 }
+            }
+        }
+    }
+
+    private fun setupRecyclerAnimations() {
+        // Keep animations subtle and diff/paging friendly.
+        (binding.recyclerView.itemAnimator as? DefaultItemAnimator)?.apply {
+            supportsChangeAnimations = false // prevents blink on updates
+            addDuration = resources.getInteger(R.integer.anim_item_appear_duration_ms).toLong()
+            removeDuration = 120L
+            moveDuration = 120L
+            changeDuration = 120L
+        } ?: run {
+            binding.recyclerView.itemAnimator = DefaultItemAnimator().apply {
+                supportsChangeAnimations = false
+                addDuration = resources.getInteger(R.integer.anim_item_appear_duration_ms).toLong()
+                removeDuration = 120L
+                moveDuration = 120L
+                changeDuration = 120L
             }
         }
     }
@@ -141,6 +180,8 @@ class ProductListActivity : ComponentActivity() {
             try {
                 viewModel.clearAll()
                 // UI controls will be synced via collector
+                binding.priceChipGroup.clearCheck()
+                binding.categorySpinner.setSelection(0)
             } finally {
                 suppressUiCallbacks = false
             }
@@ -282,7 +323,16 @@ class ProductListActivity : ComponentActivity() {
         binding.activeFiltersChipGroup.removeAllViews()
 
         fun addRemovableChip(text: String, onRemove: () -> Unit) {
-            val chip = Chip(this).apply {
+            val chip = Chip(this, null, 0).apply {
+                // Apply our Material-based polish style.
+                setChipDrawable(
+                    com.google.android.material.chip.ChipDrawable.createFromAttributes(
+                        this@ProductListActivity,
+                        null,
+                        0,
+                        R.style.Widget_KotlinFrontend_Chip_Filter
+                    )
+                )
                 this.text = text
                 isCloseIconVisible = true
                 setOnCloseIconClickListener { onRemove() }
@@ -425,6 +475,9 @@ class ProductListActivity : ComponentActivity() {
 
         binding.emptyTitle.text = title
         binding.emptySubtitle.text = subtitle
+
+        // Show/hide CTA depending on whether there's anything to clear.
+        binding.emptyClearFiltersButton.isVisible = hasActiveFilters
     }
 
     private object ViewIds {

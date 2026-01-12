@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+
+    <!-- Soft background circle -->
+    <path
+        android:fillColor="#E8F0FF"
+        android:pathData="M80,10
+            C41.34,10 10,41.34 10,80
+            C10,118.66 41.34,150 80,150
+            C118.66,150 150,118.66 150,80
+            C150,41.34 118.66,10 80,10 Z" />
+
+    <!-- Magnifier lens -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#93C5FD"
+        android:strokeWidth="4"
+        android:pathData="M70,42
+            C54.54,42 42,54.54 42,70
+            C42,85.46 54.54,98 70,98
+            C85.46,98 98,85.46 98,70
+            C98,54.54 85.46,42 70,42 Z" />
+
+    <!-- Magnifier handle -->
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M95,95 L122,122
+            C124.2,124.2 124.2,127.8 122,130
+            C119.8,132.2 116.2,132.2 114,130
+            L87,103 Z" />
+
+    <!-- Small dots to imply "no results" -->
+    <path
+        android:fillColor="#2563EB"
+        android:fillAlpha="0.65"
+        android:pathData="M48,118
+            a4,4 0 1,0 8,0
+            a4,4 0 1,0 -8,0Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:fillAlpha="0.40"
+        android:pathData="M70,124
+            a3.5,3.5 0 1,0 7,0
+            a3.5,3.5 0 1,0 -7,0Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:fillAlpha="0.70"
+        android:pathData="M94,116
+            a4,4 0 1,0 8,0
+            a4,4 0 1,0 -8,0Z" />
+</vector>

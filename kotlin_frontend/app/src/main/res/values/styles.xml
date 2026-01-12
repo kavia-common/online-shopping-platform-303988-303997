@@ -1,0 +1,35 @@
+<resources>
+
+    <!-- Durations used by subtle UI transitions -->
+    <integer name="anim_crossfade_duration_ms">180</integer>
+    <integer name="anim_item_appear_duration_ms">160</integer>
+
+    <!-- Choice chips (price presets) -->
+    <style name="Widget.KotlinFrontend.Chip.Choice" parent="Widget.MaterialComponents.Chip.Choice">
+        <item name="chipCornerRadius">14dp</item>
+        <item name="chipStrokeWidth">1dp</item>
+        <item name="chipMinHeight">36dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.MaterialComponents.Button</item>
+
+        <!-- State is handled via ColorStateList selectors (see res/color/kf_chip_choice_*.xml) -->
+        <item name="chipBackgroundColor">@color/kf_chip_choice_bg</item>
+        <item name="chipStrokeColor">@color/kf_chip_choice_stroke</item>
+        <item name="android:textColor">@color/kf_chip_choice_text</item>
+        <item name="rippleColor">@color/kf_chip_choice_ripple</item>
+    </style>
+
+    <!-- Removable chips (active filters) -->
+    <style name="Widget.KotlinFrontend.Chip.Filter" parent="Widget.MaterialComponents.Chip.Entry">
+        <item name="chipCornerRadius">14dp</item>
+        <item name="chipStrokeWidth">1dp</item>
+        <item name="chipMinHeight">36dp</item>
+        <item name="closeIconVisible">true</item>
+        <item name="closeIconTint">@color/ocean_primary</item>
+
+        <item name="chipBackgroundColor">@color/kf_chip_filter_bg</item>
+        <item name="chipStrokeColor">@color/kf_chip_filter_stroke</item>
+        <item name="android:textColor">@color/kf_chip_filter_text</item>
+        <item name="rippleColor">@color/kf_chip_filter_ripple</item>
+    </style>
+
+</resources>

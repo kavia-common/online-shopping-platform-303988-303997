@@ -5,4 +5,20 @@
     <color name="ocean_surface">#FFFFFF</color>
     <color name="ocean_text">#111827</color>
     <color name="ocean_error">#EF4444</color>
+
+    <!-- UI polish helpers (chips, strokes, subtle tints) -->
+    <color name="ocean_outline">#E5E7EB</color>
+    <color name="ocean_text_muted">#6B7280</color>
+
+    <!-- Selected chip surface is a subtle tint of primary for contrast-safe text -->
+    <color name="ocean_chip_selected_bg">#E8F0FF</color>
+    <color name="ocean_chip_selected_stroke">#93C5FD</color>
+
+    <!-- Unselected chips keep neutral surface with light outline -->
+    <color name="ocean_chip_unselected_bg">#FFFFFF</color>
+    <color name="ocean_chip_unselected_stroke">#E5E7EB</color>
+
+    <!-- Ripple colors -->
+    <color name="ocean_chip_ripple_primary">#1F4FD6</color>
+    <color name="ocean_chip_ripple_neutral">#111827</color>
 </resources>

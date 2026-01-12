@@ -32,9 +32,30 @@ This module implements **lazy loading / infinite scroll** for the product list u
 - Use **Clear all** to reset both query and filters.
 - Pull-to-refresh will reload using the current search + filters.
 
+## UI polish (animations, chips, illustrated states)
+This module includes subtle UI polish while preserving Paging 3 behavior (no full-screen flicker during refresh):
+- **RecyclerView animations**: lightweight item appear animation + diff-friendly `DefaultItemAnimator` with `supportsChangeAnimations=false`.
+- **Crossfades** between list/loading/empty/error containers.
+- **Chip styling** tuned to the Ocean Professional theme:
+  - price preset chips use `Widget.KotlinFrontend.Chip.Choice`
+  - active filter chips use `Widget.KotlinFrontend.Chip.Filter`
+- **Illustrated empty/error states** using lightweight `VectorDrawable`s.
+
+### Adjust animation durations
+Edit these integer resources:
+- `app/src/main/res/values/styles.xml`
+  - `anim_crossfade_duration_ms`
+  - `anim_item_appear_duration_ms`
+
+### Adjust chip styles
+Edit:
+- `app/src/main/res/values/styles.xml` (`Widget.KotlinFrontend.Chip.Choice`, `Widget.KotlinFrontend.Chip.Filter`)
+- `app/src/main/res/color/kf_chip_*.xml` for stateful colors (checked/disabled/ripple)
+
 ## Where to look
-- `ui/ProductListActivity.kt` – UI wiring for search/filters, refresh/retry, load state handling
+- `ui/ProductListActivity.kt` – UI wiring for search/filters, refresh/retry, load state handling + crossfades
 - `ui/ProductListViewModel.kt` – StateFlow for search/filter and `Flow<PagingData<Product>>` via `Pager`
+- `ui/UiPolish.kt` – crossfade + subtle appear animation helpers
 - `data/ProductPagingSource.kt` – loads pages using query + filters
 - `data/ProductRepository.kt` – fake data source that applies search/filter locally (ready to swap with API later)
 - `model/ProductFilter.kt` – filter state model

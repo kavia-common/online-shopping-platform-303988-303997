@@ -1,0 +1,46 @@
+package com.example.kotlinfrontend.ui
+
+import android.content.Context
+import android.util.AttributeSet
+import android.view.LayoutInflater
+import android.widget.FrameLayout
+import androidx.core.view.isVisible
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.kotlinfrontend.databinding.ViewCategorySectionBinding
+import com.example.kotlinfrontend.model.Product
+
+class CategorySectionView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) : FrameLayout(context, attrs) {
+
+    private val binding = ViewCategorySectionBinding.inflate(LayoutInflater.from(context), this, true)
+    private val adapter = CategoryPreviewAdapter()
+
+    private var onSeeAll: (() -> Unit)? = null
+
+    init {
+        binding.productsRecyclerView.layoutManager = LinearLayoutManager(context)
+        binding.productsRecyclerView.adapter = adapter
+        binding.seeAllButton.setOnClickListener { onSeeAll?.invoke() }
+    }
+
+    fun bindHeader(category: String, onSeeAllClick: () -> Unit) {
+        binding.categoryTitle.text = category
+        onSeeAll = onSeeAllClick
+    }
+
+    fun showLoading(loading: Boolean) {
+        binding.sectionProgress.isVisible = loading
+    }
+
+    fun showError(message: String?, visible: Boolean) {
+        binding.sectionErrorText.isVisible = visible
+        binding.sectionErrorText.text = message ?: "Failed to load"
+    }
+
+    fun submitItems(items: List<Product>) {
+        adapter.submitList(items)
+        binding.emptyHint.isVisible = items.isEmpty()
+    }
+}

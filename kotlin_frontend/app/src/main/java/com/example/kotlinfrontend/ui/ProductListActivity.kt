@@ -28,6 +28,194 @@ import kotlinx.coroutines.launch
 
 class ProductListActivity : ComponentActivity() {
 
+    private fun setupCategoryChipsAndGrouping(productAdapter: ProductAdapter) {
+        // Observe categories list from backend and render chips.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.categories.collectLatest { cats ->
+                    renderCategoryChips(
+                        categories = cats,
+                        selected = viewModel.selectedCategory.value,
+                        onSelected = { category ->
+                            if (suppressUiCallbacks) return@renderCategoryChips
+                            categorySectionLoaded.clear()
+                            viewModel.selectCategory(category)
+                            // Single-category view should refresh paging when switching categories.
+                            productAdapter.refresh()
+                            // Grouped mode sections need to be rebuilt for new search/filter state.
+                            rebuildGroupedSections()
+                        }
+                    )
+                }
+            }
+        }
+
+        // Keep chips in sync if selection changes via presets/active-filter removals/clear-all.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.selectedCategory.collectLatest { selected ->
+                    renderCategoryChips(
+                        categories = viewModel.categories.value,
+                        selected = selected,
+                        onSelected = { category ->
+                            if (suppressUiCallbacks) return@renderCategoryChips
+                            categorySectionLoaded.clear()
+                            viewModel.selectCategory(category)
+                            productAdapter.refresh()
+                            rebuildGroupedSections()
+                        }
+                    )
+                    toggleGroupedMode(selectedCategory = selected)
+                }
+            }
+        }
+
+        // When query/filter changes, grouped mode content should reflect it.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.activeQueryParams.collectLatest {
+                    if (viewModel.selectedCategory.value == null) {
+                        categorySectionLoaded.clear()
+                        rebuildGroupedSections()
+                    }
+                }
+            }
+        }
+
+        // Initial build (in case categories already loaded fast)
+        rebuildGroupedSections()
+    }
+
+    private fun toggleGroupedMode(selectedCategory: String?) {
+        val grouped = selectedCategory == null
+        val durationMs = animDuration(R.integer.anim_crossfade_duration_ms)
+
+        // When grouped, show custom scroll sections; when not grouped, show paged list.
+        crossfadeVisibility(binding.groupedContainer, grouped, durationMs)
+        crossfadeVisibility(binding.swipeRefresh, !grouped, durationMs)
+    }
+
+    private fun renderCategoryChips(
+        categories: List<String>,
+        selected: String?,
+        onSelected: (String?) -> Unit
+    ) {
+        binding.categoryChipGroup.removeAllViews()
+
+        fun addChoiceChip(label: String, isChecked: Boolean, onClick: () -> Unit) {
+            val chip = Chip(this, null, 0).apply {
+                setChipDrawable(
+                    com.google.android.material.chip.ChipDrawable.createFromAttributes(
+                        this@ProductListActivity,
+                        null,
+                        0,
+                        R.style.Widget_KotlinFrontend_Chip_Choice
+                    )
+                )
+                text = label
+                this.isCheckable = true
+                this.isChecked = isChecked
+                setOnClickListener { onClick() }
+            }
+            binding.categoryChipGroup.addView(chip)
+        }
+
+        // All (grouped)
+        addChoiceChip(
+            label = "All (grouped)",
+            isChecked = selected == null
+        ) { onSelected(null) }
+
+        categories.forEach { category ->
+            addChoiceChip(
+                label = category,
+                isChecked = selected == category
+            ) { onSelected(category) }
+        }
+    }
+
+    private fun rebuildGroupedSections() {
+        // Inflate a scrollable container with per-category section cards.
+        binding.groupedContainer.removeAllViews()
+
+        val inflater = layoutInflater
+        val container = inflater.inflate(
+            R.layout.view_category_sections_container,
+            binding.groupedContainer,
+            false
+        )
+        binding.groupedContainer.addView(container)
+
+        val sectionsContainer = container.findViewById<android.widget.LinearLayout>(R.id.sectionsContainer)
+        val scrollView = container.findViewById<android.widget.ScrollView>(R.id.groupedScroll)
+
+        val categories = viewModel.categories.value
+        if (categories.isEmpty()) {
+            // No categories available; show nothing (user can still use paged list by selecting a chip later).
+            return
+        }
+
+        categories.forEach { category ->
+            val sectionView = CategorySectionView(this)
+            sectionView.bindHeader(category) {
+                // See all: switch to the category-specific paged list
+                viewModel.selectCategory(category)
+            }
+            sectionView.showLoading(false)
+            sectionView.showError(null, visible = false)
+            sectionView.submitItems(emptyList())
+
+            sectionsContainer.addView(sectionView)
+
+            // Lazy-load when scrolled near this section.
+            sectionView.post {
+                maybeLoadSectionIfVisible(sectionView, category)
+            }
+        }
+
+        scrollView.viewTreeObserver.addOnScrollChangedListener {
+            val childCount = sectionsContainer.childCount
+            for (i in 0 until childCount) {
+                val v = sectionsContainer.getChildAt(i) as? CategorySectionView ?: continue
+                val categoryTitle = (v.findViewById<android.widget.TextView>(com.example.kotlinfrontend.R.id.categoryTitle))?.text?.toString()
+                if (!categoryTitle.isNullOrBlank()) {
+                    maybeLoadSectionIfVisible(v, categoryTitle)
+                }
+            }
+        }
+    }
+
+    private fun maybeLoadSectionIfVisible(sectionView: CategorySectionView, category: String) {
+        if (categorySectionLoaded.contains(category)) return
+
+        // Simple visibility heuristic: if section's top is within ~1.5 screens from the current viewport top, load it.
+        val scrollParent = sectionView.parent?.parent as? android.widget.ScrollView ?: return
+        val scrollY = scrollParent.scrollY
+        val height = scrollParent.height
+        val sectionTop = sectionView.top
+
+        val loadThreshold = scrollY + (height * 3 / 2)
+        if (sectionTop <= loadThreshold) {
+            categorySectionLoaded.add(category)
+            loadSectionPreview(sectionView, category)
+        }
+    }
+
+    private fun loadSectionPreview(sectionView: CategorySectionView, category: String) {
+        lifecycleScope.launch {
+            sectionView.showError(null, visible = false)
+            sectionView.showLoading(true)
+            try {
+                val preview = viewModel.loadCategoryPreview(category = category, previewSize = 6)
+                sectionView.submitItems(preview)
+            } catch (t: Throwable) {
+                sectionView.showError(t.message, visible = true)
+            } finally {
+                sectionView.showLoading(false)
+            }
+        }
+    }
+
     private lateinit var binding: ActivityProductListBinding
 
     private lateinit var viewModel: ProductListViewModel
@@ -36,10 +224,10 @@ class ProductListActivity : ComponentActivity() {
     // Backing store for preset CRUD
     private lateinit var presetStore: FilterPresetStore
 
-    // We need these for syncing UI <-> state when applying presets
-    private val categories = listOf("All", "Electronics", "Clothing", "Home", "Books")
-
     private var suppressUiCallbacks = false
+
+    // Grouped mode: lazy-load previews only when section becomes visible.
+    private val categorySectionLoaded = mutableSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +248,7 @@ class ProductListActivity : ComponentActivity() {
         setupRecyclerAnimations()
         setupSearchAndFilters(productAdapter)
         setupPresetsAndClearAll(productAdapter)
+        setupCategoryChipsAndGrouping(productAdapter)
 
         binding.openOrdersButton.setOnClickListener {
             startActivity(Intent(this, OrdersActivity::class.java))
@@ -107,7 +296,6 @@ class ProductListActivity : ComponentActivity() {
             try {
                 viewModel.clearFilters()
                 binding.priceChipGroup.clearCheck()
-                binding.categorySpinner.setSelection(0)
             } finally {
                 suppressUiCallbacks = false
             }
@@ -272,20 +460,8 @@ class ProductListActivity : ComponentActivity() {
             }
         })
 
-        // Category spinner
-        val spinnerAdapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            categories
-        )
-        binding.categorySpinner.adapter = spinnerAdapter
-        binding.categorySpinner.setSelection(0)
-        binding.categorySpinner.setOnItemSelectedListener { _, _, position, _ ->
-            if (suppressUiCallbacks) return@setOnItemSelectedListener
-            val selected = categories[position]
-            viewModel.setCategory(if (selected == "All") null else selected)
-            productAdapter.refresh()
-        }
+        // Legacy category spinner is hidden; category browsing is now via chips.
+        binding.legacyCategorySpinnerRow.isVisible = false
 
         // Price chips (simple preset ranges)
         binding.priceChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
@@ -325,14 +501,8 @@ class ProductListActivity : ComponentActivity() {
             binding.searchEditText.setSelection(query.length)
         }
 
-        // Category spinner
-        val spinnerPos = when (filter.category) {
-            null -> 0
-            else -> categories.indexOfFirst { it == filter.category }.let { if (it >= 0) it else 0 }
-        }
-        if (binding.categorySpinner.selectedItemPosition != spinnerPos) {
-            binding.categorySpinner.setSelection(spinnerPos)
-        }
+        // Category chips selection is driven by viewModel.selectedCategory collector.
+        // (No-op here; we avoid duplicating state updates.)
 
         // Price chips (map filter min/max into the 3 known options; otherwise clear selection)
         val targetChipId = when {
@@ -390,7 +560,7 @@ class ProductListActivity : ComponentActivity() {
 
         filter.category?.let { category ->
             addRemovableChip("Category: $category") {
-                viewModel.setCategory(null)
+                viewModel.selectCategory(null)
                 onStateChanged()
             }
         }

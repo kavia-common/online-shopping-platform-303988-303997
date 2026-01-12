@@ -4,11 +4,16 @@ This module implements **lazy loading / infinite scroll** for the product list u
 
 ## Features implemented
 - Infinite scroll / paging (efficient incremental fetch)
-- Search + filter integrated with paging:
+- Category browsing (chips) + optional grouped view:
+  - Horizontally scrollable **category chips**: **All (grouped)** + each backend category
+  - Selecting a category switches to the existing **Paging 3** list filtered by that category
+  - Selecting **All (grouped)** shows **category sections** (header per category) with a **See all** action
+  - **Lazy loading per section**: each category section fetches only a small preview page when it becomes visible (prevents over-fetching)
+- Search + filter integrated with paging and grouping:
   - Search field (debounced ~300ms)
-  - Category filter (dropdown)
   - Price filter (chips)
   - Search/filter changes recreate the `PagingSource` and refresh results efficiently
+  - In grouped mode, the current search/filter state is applied to each category preview query as well
 - Loading states:
   - Fullscreen initial loading (when list empty)
   - Footer loading (when appending)
@@ -22,7 +27,10 @@ This module implements **lazy loading / infinite scroll** for the product list u
 
 ## How to use (in the app)
 - Type in the search box to update results (debounced).
-- Choose a category from the dropdown.
+- Use the **category chips**:
+  - **All (grouped)**: shows category sections with small previews (lazy loaded on scroll)
+  - Tap a category: shows the **paged list** for that category (infinite scroll)
+  - Tap the “x” on the active **Category: …** chip to clear and return to **All (grouped)**
 - Pick a price range chip (or select “Any”).
 - Active search/filters appear as **removable chips** under the search bar (tap the “x” to remove).
 - Use **Presets** to:

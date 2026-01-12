@@ -131,11 +131,39 @@
             android:visibility="gone"
             app:singleLine="false"/>
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/categoriesLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:text="Browse by category"
+            android:textColor="@color/ocean_text"
+            android:textStyle="bold"/>
+
+        <HorizontalScrollView
+            android:id="@+id/categoryChipsScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/categoryChipGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true" />
+
+        </HorizontalScrollView>
+
+        <!-- Keep existing spinner for backwards compatibility / accessibility; hidden by default now -->
+        <LinearLayout
+            android:id="@+id/legacyCategorySpinnerRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -219,6 +247,7 @@
 
     </LinearLayout>
 
+    <!-- Single-category (paged) mode -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipeRefresh"
         android:layout_width="0dp"
@@ -235,6 +264,17 @@
             android:clipToPadding="false"
             android:padding="12dp"/>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- All (grouped) mode -->
+    <FrameLayout
+        android:id="@+id/groupedContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/searchFiltersContainer"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent" />
 
     <!-- Fullscreen initial loading -->
     <LinearLayout

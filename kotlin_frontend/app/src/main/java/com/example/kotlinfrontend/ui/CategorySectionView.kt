@@ -27,6 +27,12 @@ class CategorySectionView @JvmOverloads constructor(
 
     fun bindHeader(category: String, onSeeAllClick: () -> Unit) {
         binding.categoryTitle.text = category
+
+        // Icon is optional via mapping; unknown categories fall back to generic.
+        val iconRes = CategoryIconMapper.iconResForCategory(category)
+        binding.categoryIcon.setImageResource(iconRes)
+        binding.categoryIcon.contentDescription = CategoryIconMapper.contentDescriptionForCategory(category)
+
         onSeeAll = onSeeAllClick
     }
 

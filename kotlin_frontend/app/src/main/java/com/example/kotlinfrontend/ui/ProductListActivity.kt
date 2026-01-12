@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.widget.ArrayAdapter
 import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.core.view.isVisible
@@ -15,6 +14,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSnapHelper
 import com.example.kotlinfrontend.R
 import com.example.kotlinfrontend.data.FilterPresetStore
 import com.example.kotlinfrontend.databinding.ActivityProductListBinding
@@ -100,38 +100,37 @@ class ProductListActivity : ComponentActivity() {
         selected: String?,
         onSelected: (String?) -> Unit
     ) {
-        binding.categoryChipGroup.removeAllViews()
+        // RecyclerView-based chip bar for smoother scrolling + snap-to-item.
+        if (binding.categoryChipsRecycler.adapter == null) {
+            val adapter = CategoryChipAdapter(onSelected = { category ->
+                onSelected(category)
+            })
 
-        fun addChoiceChip(label: String, isChecked: Boolean, onClick: () -> Unit) {
-            val chip = Chip(this, null, 0).apply {
-                setChipDrawable(
-                    com.google.android.material.chip.ChipDrawable.createFromAttributes(
-                        this@ProductListActivity,
-                        null,
-                        0,
-                        R.style.Widget_KotlinFrontend_Chip_Choice
-                    )
+            binding.categoryChipsRecycler.layoutManager =
+                LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+            binding.categoryChipsRecycler.adapter = adapter
+
+            // Spacing (start/end padding + inter-item spacing).
+            val startEnd = resources.displayMetrics.density.times(12).toInt()
+            val spacing = resources.displayMetrics.density.times(8).toInt()
+            binding.categoryChipsRecycler.addItemDecoration(
+                HorizontalSpaceItemDecoration(
+                    startPaddingPx = startEnd,
+                    itemSpacingPx = spacing,
+                    endPaddingPx = startEnd
                 )
-                text = label
-                this.isCheckable = true
-                this.isChecked = isChecked
-                setOnClickListener { onClick() }
-            }
-            binding.categoryChipGroup.addView(chip)
+            )
+
+            // Snap chips to align nicely after fling.
+            LinearSnapHelper().attachToRecyclerView(binding.categoryChipsRecycler)
+
+            // Keep accessibility and performance stable.
+            binding.categoryChipsRecycler.isNestedScrollingEnabled = false
+            binding.categoryChipsRecycler.itemAnimator = null
         }
 
-        // All (grouped)
-        addChoiceChip(
-            label = "All (grouped)",
-            isChecked = selected == null
-        ) { onSelected(null) }
-
-        categories.forEach { category ->
-            addChoiceChip(
-                label = category,
-                isChecked = selected == category
-            ) { onSelected(category) }
-        }
+        (binding.categoryChipsRecycler.adapter as? CategoryChipAdapter)
+            ?.submitCategories(categories = categories, selected = selected)
     }
 
     private fun rebuildGroupedSections() {
@@ -177,7 +176,9 @@ class ProductListActivity : ComponentActivity() {
             val childCount = sectionsContainer.childCount
             for (i in 0 until childCount) {
                 val v = sectionsContainer.getChildAt(i) as? CategorySectionView ?: continue
-                val categoryTitle = (v.findViewById<android.widget.TextView>(com.example.kotlinfrontend.R.id.categoryTitle))?.text?.toString()
+                val categoryTitle = (v.findViewById<android.widget.TextView>(com.example.kotlinfrontend.R.id.categoryTitle))
+                    ?.text
+                    ?.toString()
                 if (!categoryTitle.isNullOrBlank()) {
                     maybeLoadSectionIfVisible(v, categoryTitle)
                 }
@@ -688,8 +689,6 @@ class ProductListActivity : ComponentActivity() {
         const val NO_ID = -1
     }
 }
-
-
 
 // PUBLIC_INTERFACE
 fun centsToDollarsText(cents: Int): String {

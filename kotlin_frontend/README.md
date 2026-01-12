@@ -5,9 +5,10 @@ This module implements **lazy loading / infinite scroll** for the product list u
 ## Features implemented
 - Infinite scroll / paging (efficient incremental fetch)
 - Category browsing (chips) + optional grouped view:
-  - Horizontally scrollable **category chips**: **All (grouped)** + each backend category
+  - Horizontally scrollable **category chips** (RecyclerView) with **snap-to-item** fling behavior: **All (grouped)** + each backend category
+  - Chips show **category icons** (known categories mapped to vector drawables; unknown categories use a generic icon)
   - Selecting a category switches to the existing **Paging 3** list filtered by that category
-  - Selecting **All (grouped)** shows **category sections** (header per category) with a **See all** action
+  - Selecting **All (grouped)** shows **category sections** with a styled header (icon + divider) and a **See all** action
   - **Lazy loading per section**: each category section fetches only a small preview page when it becomes visible (prevents over-fetching)
 - Search + filter integrated with paging and grouping:
   - Search field (debounced ~300ms)
@@ -59,6 +60,14 @@ Edit these integer resources:
 Edit:
 - `app/src/main/res/values/styles.xml` (`Widget.KotlinFrontend.Chip.Choice`, `Widget.KotlinFrontend.Chip.Filter`)
 - `app/src/main/res/color/kf_chip_*.xml` for stateful colors (checked/disabled/ripple)
+
+### Category icons (chips + section headers)
+- Icon mapping is implemented in:
+  - `app/src/main/java/com/example/kotlinfrontend/ui/CategoryIconMapper.kt`
+- Vector drawable icons live in:
+  - `app/src/main/res/drawable/` (e.g., `ic_category_electronics.xml`, `ic_category_generic.xml`)
+- Chip icon tint is controlled by:
+  - `app/src/main/res/color/kf_chip_choice_icon_tint.xml`
 
 ## Where to look
 - `ui/ProductListActivity.kt` – UI wiring for search/filters, refresh/retry, load state handling + crossfades

@@ -51,6 +51,15 @@
 
     <string name="footer_text">Ocean Shop • Demo e-commerce UI (mock data)</string>
 
+    <!-- Header/Footer navigation accessibility -->
+    <string name="cd_cart">Cart</string>
+    <string name="cd_nav_home">Go to Home</string>
+    <string name="cd_nav_catalog">Go to Catalog</string>
+    <string name="cd_nav_cart">Go to Cart</string>
+
+    <!-- Optional (only used if Favorites destination exists) -->
+    <string name="title_favorites">Favorites</string>
+
     <!-- Product media + sale -->
     <string name="sale_badge">SALE</string>
     <string name="sale_badge_percent">%1$d%% OFF</string>

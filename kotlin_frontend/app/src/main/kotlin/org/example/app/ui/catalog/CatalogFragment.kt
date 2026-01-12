@@ -41,6 +41,13 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
     private lateinit var recentSearchesContainer: LinearLayout
     private lateinit var btnClearRecentSearches: MaterialButton
 
+    // Catalog filter/sort UI
+    private lateinit var sortSpinner: android.widget.Spinner
+    private lateinit var categoryContainer: LinearLayout
+
+    // Flag to avoid persisting while we're programmatically restoring state.
+    private var isRestoringCatalogPrefs: Boolean = false
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingSearchRunnable: Runnable? = null
 
@@ -63,6 +70,9 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         recentSearchesContainer = view.findViewById(R.id.recent_searches_container)
         btnClearRecentSearches = view.findViewById(R.id.btn_clear_recent_searches)
 
+        categoryContainer = view.findViewById(R.id.category_container)
+        sortSpinner = view.findViewById(R.id.spinner_sort)
+
         rvProducts.layoutManager = LinearLayoutManager(requireContext())
 
         adapter = ProductAdapter { product ->
@@ -73,12 +83,14 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         }
         rvProducts.adapter = adapter
 
-        // Sidebar category filters
-        val categoryContainer = view.findViewById<LinearLayout>(R.id.category_container)
-        renderCategoryFilters(categoryContainer)
-
         // Sorting dropdown (kept within existing sidebar panel)
         setupSortDropdown(view)
+
+        // Restore persisted catalog filter/sort before rendering category chips, so UI uses restored values.
+        restoreCatalogPreferences()
+
+        // Sidebar category filters
+        renderCategoryFilters(categoryContainer)
 
         view.findViewById<MaterialButton>(R.id.btn_go_to_cart).setOnClickListener {
             findNavController().navigate(R.id.action_catalog_to_cart)
@@ -170,7 +182,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         }
         spinner.adapter = spinnerAdapter
 
-        // Default is relevance.
+        // Default is relevance. This may be overridden by restoreCatalogPreferences().
         spinner.setSelection(0, false)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
@@ -185,6 +197,11 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                     3 -> SortOption.NAME_A_TO_Z
                     else -> SortOption.RELEVANCE
                 }
+
+                if (!isRestoringCatalogPrefs) {
+                    persistCatalogPreferences()
+                }
+
                 refreshProducts()
             }
 
@@ -212,6 +229,9 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
             tv.setOnClickListener {
                 selectedCategoryId = categoryId
+                if (!isRestoringCatalogPrefs) {
+                    persistCatalogPreferences()
+                }
                 refreshProducts()
             }
 
@@ -234,6 +254,51 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         val showEmpty = sorted.isEmpty()
         tvEmptyResults.visibility = if (showEmpty) View.VISIBLE else View.GONE
         rvProducts.visibility = if (showEmpty) View.INVISIBLE else View.VISIBLE
+    }
+
+    private fun sortOptionToSpinnerPosition(option: SortOption): Int {
+        return when (option) {
+            SortOption.RELEVANCE -> 0
+            SortOption.PRICE_LOW_TO_HIGH -> 1
+            SortOption.PRICE_HIGH_TO_LOW -> 2
+            SortOption.NAME_A_TO_Z -> 3
+        }
+    }
+
+    private fun sortKeyToSortOption(sortKey: String): SortOption {
+        return when (sortKey.trim().uppercase(Locale.US)) {
+            "PRICE_LOW_TO_HIGH" -> SortOption.PRICE_LOW_TO_HIGH
+            "PRICE_HIGH_TO_LOW" -> SortOption.PRICE_HIGH_TO_LOW
+            "NAME_A_TO_Z" -> SortOption.NAME_A_TO_Z
+            else -> SortOption.RELEVANCE
+        }
+    }
+
+    private fun persistCatalogPreferences() {
+        ShopRepository.saveCatalogPreferences(
+            ShopRepository.CatalogPreferences(
+                selectedCategoryId = selectedCategoryId,
+                sortKey = selectedSortOption.name
+            )
+        )
+    }
+
+    private fun restoreCatalogPreferences() {
+        isRestoringCatalogPrefs = true
+        try {
+            val prefs = ShopRepository.loadCatalogPreferences(defaultSortKey = SortOption.RELEVANCE.name)
+
+            selectedCategoryId = prefs.selectedCategoryId
+            selectedSortOption = sortKeyToSortOption(prefs.sortKey)
+
+            // Keep the sort control in sync with persisted value.
+            // setSelection(..., false) avoids an extra selection animation; listener will still be invoked on some
+            // platform versions, so we guard with isRestoringCatalogPrefs to avoid re-persisting.
+            val position = sortOptionToSpinnerPosition(selectedSortOption)
+            sortSpinner.setSelection(position, false)
+        } finally {
+            isRestoringCatalogPrefs = false
+        }
     }
 
     private fun applyFilters(products: List<Product>): List<Product> {

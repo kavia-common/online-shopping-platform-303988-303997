@@ -39,6 +39,16 @@ object ShopRepository {
     // Recent searches (most-recent-first), kept in-memory and persisted.
     private val recentSearches: MutableList<String> = mutableListOf()
 
+    /**
+     * Catalog UI state that we persist so filters/sort survive app restarts and navigation.
+     *
+     * Note: Search query persistence is already covered by recent searches.
+     */
+    data class CatalogPreferences(
+        val selectedCategoryId: String?,
+        val sortKey: String
+    )
+
     // PUBLIC_INTERFACE
     fun getCategories(): List<Category> = categories
 
@@ -157,6 +167,33 @@ object ShopRepository {
     fun clearRecentSearches() {
         recentSearches.clear()
         localStore?.writeRecentSearches(recentSearches)
+    }
+
+    /**
+     * Loads persisted catalog filter/sort preferences.
+     *
+     * If nothing has been stored yet, returns defaults (All categories + RELEVANCE sort).
+     */
+    // PUBLIC_INTERFACE
+    fun loadCatalogPreferences(defaultSortKey: String = "RELEVANCE"): CatalogPreferences {
+        val store = localStore
+        val categoryId = store?.readCatalogSelectedCategoryId()
+        val sortKey = store?.readCatalogSortKey() ?: defaultSortKey
+        return CatalogPreferences(
+            selectedCategoryId = categoryId,
+            sortKey = sortKey
+        )
+    }
+
+    /**
+     * Persists catalog filter/sort preferences.
+     *
+     * This is expected to be called whenever the user changes category or sort order.
+     */
+    // PUBLIC_INTERFACE
+    fun saveCatalogPreferences(prefs: CatalogPreferences) {
+        localStore?.writeCatalogSelectedCategoryId(prefs.selectedCategoryId)
+        localStore?.writeCatalogSortKey(prefs.sortKey)
     }
 
     private fun publishCart() {

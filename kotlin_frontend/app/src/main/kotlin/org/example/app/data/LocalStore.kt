@@ -83,6 +83,36 @@ internal class LocalStore(private val appContext: Context) {
         prefs.edit().putString(KEY_RECENT_SEARCHES, raw).apply()
     }
 
+    /**
+     * Reads persisted catalog filter state.
+     */
+    fun readCatalogSelectedCategoryId(): String? {
+        return prefs.getString(KEY_CATALOG_SELECTED_CATEGORY_ID, null)?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Persists selected category for the catalog. Use null to indicate "All".
+     */
+    fun writeCatalogSelectedCategoryId(categoryId: String?) {
+        prefs.edit().putString(KEY_CATALOG_SELECTED_CATEGORY_ID, categoryId?.trim()).apply()
+    }
+
+    /**
+     * Reads persisted catalog sort key.
+     *
+     * @return raw persisted key (e.g. "RELEVANCE") or null if not set.
+     */
+    fun readCatalogSortKey(): String? {
+        return prefs.getString(KEY_CATALOG_SORT_KEY, null)?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Persists catalog sort key. Callers should store stable keys (e.g. enum.name).
+     */
+    fun writeCatalogSortKey(sortKey: String) {
+        prefs.edit().putString(KEY_CATALOG_SORT_KEY, sortKey.trim()).apply()
+    }
+
     companion object {
         @VisibleForTesting
         internal const val PREFS_NAME = "ocean_shop_prefs"
@@ -92,5 +122,12 @@ internal class LocalStore(private val appContext: Context) {
 
         @VisibleForTesting
         internal const val KEY_RECENT_SEARCHES = "recent_searches_v1"
+
+        // Catalog persistence
+        @VisibleForTesting
+        internal const val KEY_CATALOG_SELECTED_CATEGORY_ID = "catalog_selected_category_id_v1"
+
+        @VisibleForTesting
+        internal const val KEY_CATALOG_SORT_KEY = "catalog_sort_key_v1"
     }
 }

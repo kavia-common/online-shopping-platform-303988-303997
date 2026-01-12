@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
+import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.data.OrderRepository
 import com.example.kotlinfrontend.model.CartItem
@@ -80,6 +81,11 @@ class CheckoutViewModel(
 
     val coupon: StateFlow<Coupon?> = cartRepo.coupon
     val couponValidationState: StateFlow<CouponValidationState> = cartRepo.couponValidationState
+    val lastCouponUxFeedback: StateFlow<CouponUxFeedback> = cartRepo.lastCouponUxFeedback
+
+    val savedCoupons: StateFlow<List<String>> = cartRepo.savedCoupons
+    val couponSuggestions: StateFlow<List<String>> = cartRepo.couponSuggestions
+
     val totals: StateFlow<CartTotals> = cartRepo.totals
 
     // PUBLIC_INTERFACE
@@ -161,6 +167,30 @@ class CheckoutViewModel(
     fun removeCoupon() {
         /** Remove applied coupon. */
         cartRepo.removeCoupon()
+    }
+
+    // PUBLIC_INTERFACE
+    fun addSavedCoupon(code: String) {
+        /** Add coupon code to saved list. */
+        cartRepo.addSavedCoupon(code)
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeSavedCoupon(code: String) {
+        /** Remove coupon code from saved list. */
+        cartRepo.removeSavedCoupon(code)
+    }
+
+    // PUBLIC_INTERFACE
+    fun clearSavedCoupons() {
+        /** Clear all saved coupon codes. */
+        cartRepo.clearSavedCoupons()
+    }
+
+    // PUBLIC_INTERFACE
+    fun isCouponSaved(code: String): Boolean {
+        /** Returns true if coupon is saved (case-insensitive). */
+        return cartRepo.isCouponSaved(code)
     }
 
     // PUBLIC_INTERFACE

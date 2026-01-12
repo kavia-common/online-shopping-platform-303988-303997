@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
 import com.example.kotlinfrontend.data.CartErrorEvent
+import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.model.CartItem
 import com.example.kotlinfrontend.model.CartSummary
@@ -41,6 +42,19 @@ class CartViewModel(application: Application) : AndroidViewModel(application) {
             SharingStarted.Eagerly,
             cartRepo.couponValidationState.value
         )
+
+    val lastCouponUxFeedback: StateFlow<CouponUxFeedback> =
+        cartRepo.lastCouponUxFeedback.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            cartRepo.lastCouponUxFeedback.value
+        )
+
+    val savedCoupons: StateFlow<List<String>> =
+        cartRepo.savedCoupons.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.savedCoupons.value)
+
+    val couponSuggestions: StateFlow<List<String>> =
+        cartRepo.couponSuggestions.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.couponSuggestions.value)
 
     val totals: StateFlow<CartTotals> =
         cartRepo.totals.stateIn(viewModelScope, SharingStarted.Eagerly, cartRepo.discountedTotals())
@@ -124,6 +138,30 @@ class CartViewModel(application: Application) : AndroidViewModel(application) {
     fun removeCoupon() {
         /** Remove the currently applied coupon. */
         cartRepo.removeCoupon()
+    }
+
+    // PUBLIC_INTERFACE
+    fun addSavedCoupon(code: String) {
+        /** Add coupon code to saved list. */
+        cartRepo.addSavedCoupon(code)
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeSavedCoupon(code: String) {
+        /** Remove coupon code from saved list. */
+        cartRepo.removeSavedCoupon(code)
+    }
+
+    // PUBLIC_INTERFACE
+    fun clearSavedCoupons() {
+        /** Clear all saved coupon codes. */
+        cartRepo.clearSavedCoupons()
+    }
+
+    // PUBLIC_INTERFACE
+    fun isCouponSaved(code: String): Boolean {
+        /** Returns true if coupon is saved (case-insensitive). */
+        return cartRepo.isCouponSaved(code)
     }
 }
 

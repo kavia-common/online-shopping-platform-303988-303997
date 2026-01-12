@@ -110,6 +110,7 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <!-- Use exposed dropdown (AutoCompleteTextView) for suggestions -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/couponInputLayout"
                         android:layout_width="0dp"
@@ -120,19 +121,37 @@
                         app:boxCornerRadiusBottomEnd="14dp"
                         app:boxCornerRadiusBottomStart="14dp"
                         app:boxCornerRadiusTopEnd="14dp"
-                        app:boxCornerRadiusTopStart="14dp">
+                        app:boxCornerRadiusTopStart="14dp"
+                        app:endIconMode="custom"
+                        app:endIconDrawable="@drawable/ic_arrow_drop_down_24"
+                        app:endIconContentDescription="Show coupon suggestions">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <AutoCompleteTextView
                             android:id="@+id/couponCodeEditText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:contentDescription="Coupon code"
                             android:inputType="text"
-                            android:maxLines="1" />
+                            android:maxLines="1"
+                            android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <Space
                         android:layout_width="10dp"
+                        android:layout_height="1dp" />
+
+                    <ImageButton
+                        android:id="@+id/manageSavedCouponsButton"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Manage saved coupons"
+                        android:padding="8dp"
+                        android:src="@drawable/ic_bookmark_24"
+                        app:tint="@color/ocean_secondary" />
+
+                    <Space
+                        android:layout_width="6dp"
                         android:layout_height="1dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -145,6 +164,16 @@
                         android:text="Apply" />
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/couponHelperText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text=""
+                    android:textColor="@color/ocean_text"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <!-- Applied coupon row -->
                 <LinearLayout
                     android:id="@+id/appliedCouponRow"
@@ -155,14 +184,19 @@
                     android:orientation="horizontal"
                     android:visibility="gone">
 
-                    <TextView
-                        android:id="@+id/appliedCouponText"
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/activeCouponChip"
+                        style="@style/Widget.MaterialComponents.Chip.Action"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Coupon: -"
-                        android:textColor="@color/ocean_text"
-                        android:textStyle="bold" />
+                        android:text="COUPON"
+                        app:closeIconEnabled="true"
+                        app:closeIconVisible="true" />
+
+                    <Space
+                        android:layout_width="8dp"
+                        android:layout_height="1dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/removeCouponButton"

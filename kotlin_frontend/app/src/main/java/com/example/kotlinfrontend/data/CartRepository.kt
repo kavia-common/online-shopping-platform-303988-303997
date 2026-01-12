@@ -56,6 +56,7 @@ class CartRepository(context: Context) {
     private val appContext = context.applicationContext
     private val store = CartStore(appContext)
     private val couponStore = CouponStore(appContext)
+    private val savedCouponsStore = SavedCouponsStore(appContext)
     private val identityStore = CartIdentityStore(appContext)
 
     private val cartApi: CartApi = ApiClient.createCartApi()
@@ -74,6 +75,30 @@ class CartRepository(context: Context) {
 
     private val _couponValidationState = MutableStateFlow<CouponValidationState>(CouponValidationState.None)
     val couponValidationState: StateFlow<CouponValidationState> = _couponValidationState.asStateFlow()
+
+    /**
+     * Last user-facing coupon validation feedback (for inline error/helper text in Cart/Checkout).
+     *
+     * - Network/transient failures are still emitted via errorEvents (Snackbars).
+     * - Rule violations should be shown inline to preserve the typed code and make it actionable.
+     */
+    private val _lastCouponUxFeedback = MutableStateFlow<CouponUxFeedback>(CouponUxFeedback(CouponUxFeedback.Type.NONE, ""))
+    val lastCouponUxFeedback: StateFlow<CouponUxFeedback> = _lastCouponUxFeedback.asStateFlow()
+
+    /**
+     * Recently saved coupon codes (local-only).
+     */
+    private val _savedCoupons = MutableStateFlow<List<String>>(savedCouponsStore.load())
+    val savedCoupons: StateFlow<List<String>> = _savedCoupons.asStateFlow()
+
+    /**
+     * Coupon suggestions to show in autocomplete/dropdown.
+     *
+     * Currently: local saved coupons only.
+     * Future: can merge server suggestions with local saved.
+     */
+    private val _couponSuggestions = MutableStateFlow<List<String>>(savedCouponsStore.load())
+    val couponSuggestions: StateFlow<List<String>> = _couponSuggestions.asStateFlow()
 
     private val _totals = MutableStateFlow(computeTotals(items = _items.value, coupon = _coupon.value))
     val totals: StateFlow<CartTotals> = _totals.asStateFlow()
@@ -269,22 +294,54 @@ class CartRepository(context: Context) {
     }
 
     // PUBLIC_INTERFACE
+    fun addSavedCoupon(codeRaw: String) {
+        /** Add code to saved coupons list (most-recent-first). */
+        val updated = savedCouponsStore.add(codeRaw)
+        _savedCoupons.value = updated
+        _couponSuggestions.value = mergeSuggestions(saved = updated, server = null)
+    }
+
+    // PUBLIC_INTERFACE
+    fun removeSavedCoupon(codeRaw: String) {
+        /** Remove code from saved coupons list. */
+        val updated = savedCouponsStore.remove(codeRaw)
+        _savedCoupons.value = updated
+        _couponSuggestions.value = mergeSuggestions(saved = updated, server = null)
+    }
+
+    // PUBLIC_INTERFACE
+    fun clearSavedCoupons() {
+        /** Clear all saved coupons. */
+        savedCouponsStore.clear()
+        _savedCoupons.value = emptyList()
+        _couponSuggestions.value = emptyList()
+    }
+
+    // PUBLIC_INTERFACE
+    fun isCouponSaved(codeRaw: String): Boolean {
+        /** Returns true if code is in saved coupons (case-insensitive). */
+        return savedCouponsStore.isSaved(codeRaw)
+    }
+
+    // PUBLIC_INTERFACE
     fun applyCoupon(codeRaw: String) {
         /**
          * Apply a coupon code.
          *
-         * Behavior:
-         * - Local optimistic application:
-         *   - Non-empty / basic format validation
-         *   - If no backend identity or backend endpoint missing: mark as PendingServerValidation
-         * - If backend validation/apply exists and identity is available:
-         *   - Attempt validate/apply; keep coupon but mark Invalid on rule violations.
+         * UX behavior:
+         * - Preserve the typed code in the field (UI should not clear it on errors).
+         * - Rule/validation errors are exposed via couponValidationState + lastCouponUxFeedback (inline).
+         * - Network/transient failures remain snackbars via errorEvents (with Retry).
          */
         val code = normalizeCouponCode(codeRaw)
         if (code.isBlank()) {
             repoScope.launch {
                 mutex.withLock {
                     setCouponLocked(coupon = null, state = CouponValidationState.Invalid("Enter a coupon code."))
+                    _lastCouponUxFeedback.value = CouponUxFeedback(
+                        type = CouponUxFeedback.Type.INVALID_RULE,
+                        message = "Enter a coupon code."
+                    )
                 }
             }
             return
@@ -300,11 +357,14 @@ class CartRepository(context: Context) {
             mutex.withLock {
                 // Optimistic: apply coupon immediately using locally derived coupon metadata (fallback).
                 setCouponLocked(coupon = localCoupon, state = CouponValidationState.PendingServerValidation)
+                _lastCouponUxFeedback.value = CouponUxFeedback(CouponUxFeedback.Type.NONE, "")
 
                 // If local constraints fail, treat as invalid immediately.
                 val localConstraintError = validateCouponAgainstLocalConstraints(localCoupon, currentSubtotal)
                 if (localConstraintError != null) {
-                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(localConstraintError))
+                    val friendly = CouponErrorMessageMapper.map(localConstraintError)
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(friendly))
+                    _lastCouponUxFeedback.value = CouponUxFeedback(CouponUxFeedback.Type.INVALID_RULE, friendly)
                     return@launch
                 }
             }
@@ -322,7 +382,7 @@ class CartRepository(context: Context) {
             try {
                 val isValid = validateCouponWithBackendBestEffort(email = email, code = code)
                 if (!isValid) {
-                    // validateCouponWithBackendBestEffort already updated state/coupon if possible.
+                    // validateCouponWithBackendBestEffort already updated state/coupon/feedback.
                     return@launch
                 }
 
@@ -338,6 +398,15 @@ class CartRepository(context: Context) {
                     mutex.withLock {
                         // Even if backend cart DTO doesn't contain coupon, we keep local coupon and mark valid.
                         _couponValidationState.value = CouponValidationState.Valid
+                        _lastCouponUxFeedback.value = CouponUxFeedback(
+                            type = CouponUxFeedback.Type.APPLIED,
+                            message = "Coupon applied."
+                        )
+                        // Save to recents once we know it's valid (rule-valid, not just pending).
+                        val updatedSaved = savedCouponsStore.add(code)
+                        _savedCoupons.value = updatedSaved
+                        _couponSuggestions.value = mergeSuggestions(saved = updatedSaved, server = null)
+
                         recomputeTotalsLocked()
                     }
                 } catch (tApply: Throwable) {
@@ -352,6 +421,7 @@ class CartRepository(context: Context) {
                     couponStore.save(previousCoupon)
                     recomputeTotalsLocked()
                 }
+                // Keep snackbars for transient issues.
                 emitError("Couldn't apply coupon. Please try again.", CartErrorEvent.Operation.APPLY_COUPON, t)
             }
         }
@@ -539,12 +609,16 @@ class CartRepository(context: Context) {
                 body = CouponApplyRequestDto(code = code, items = buildCouponLineItemsLockedUnsafe())
             )
             if (!resp.valid) {
-                val msg = resp.message ?: "Coupon can't be applied."
+                val raw = resp.message ?: "Coupon can't be applied."
+                val friendly = CouponErrorMessageMapper.map(raw)
                 mutex.withLock {
-                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(msg))
+                    setCouponLocked(coupon = null, state = CouponValidationState.Invalid(friendly))
+                    _lastCouponUxFeedback.value = CouponUxFeedback(
+                        type = CouponUxFeedback.Type.INVALID_RULE,
+                        message = friendly
+                    )
                 }
-                // Surface rule violations (min subtotal/category/usage limit) explicitly.
-                emitError(msg, CartErrorEvent.Operation.APPLY_COUPON, RuntimeException(msg))
+                // Rule violations are not network errors; keep them inline (no snackbar).
                 false
             } else {
                 val mappedCoupon = resp.coupon?.toDomainCouponFallback(code)
@@ -556,6 +630,14 @@ class CartRepository(context: Context) {
                         _couponValidationState.value = CouponValidationState.Valid
                         recomputeTotalsLocked()
                     }
+                    _lastCouponUxFeedback.value = CouponUxFeedback(
+                        type = CouponUxFeedback.Type.APPLIED,
+                        message = "Coupon applied."
+                    )
+                    // Save recents on confirmed validity.
+                    val updatedSaved = savedCouponsStore.add(code)
+                    _savedCoupons.value = updatedSaved
+                    _couponSuggestions.value = mergeSuggestions(saved = updatedSaved, server = null)
                 }
                 true
             }
@@ -648,6 +730,14 @@ class CartRepository(context: Context) {
             tax = tax,
             total = total
         )
+    }
+
+    private fun mergeSuggestions(saved: List<String>, server: List<String>?): List<String> {
+        // Server suggestions (if provided in future) should appear after saved ones, de-duped.
+        val merged = (saved + (server ?: emptyList()))
+            .mapNotNull { it.trim().takeIf { s -> s.isNotBlank() } }
+            .distinctBy { it.uppercase(Locale.US) }
+        return merged
     }
 
     private suspend fun emitError(message: String, op: CartErrorEvent.Operation, t: Throwable) {

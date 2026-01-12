@@ -3,15 +3,21 @@ package com.example.kotlinfrontend.ui
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import androidx.activity.ComponentActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.kotlinfrontend.R
+import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.databinding.ActivityCheckoutBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -23,11 +29,14 @@ import java.util.Locale
  * Captures customer identity + shipping address (placeholders for now) and submits an order to backend.
  * Coupon support:
  * - Apply/remove coupon before placing order; totals update reactively.
+ * - Saved coupons + suggestions via exposed dropdown; local-only fallback.
  */
 class CheckoutActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityCheckoutBinding
     private lateinit var viewModel: CheckoutViewModel
+
+    private var suggestionsAdapter: ArrayAdapter<String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +51,7 @@ class CheckoutActivity : ComponentActivity() {
 
         setupToolbar()
         setupFormListeners()
+        setupCouponSuggestions()
         bindState()
 
         viewModel.prefillEmailIfAvailable()
@@ -67,12 +77,34 @@ class CheckoutActivity : ComponentActivity() {
         binding.checkoutApplyCouponButton.setOnClickListener { viewModel.applyCouponFromCheckout() }
         binding.checkoutRemoveCouponButton.setOnClickListener { viewModel.removeCoupon() }
 
+        binding.checkoutManageSavedCouponsButton.setOnClickListener { showManageSavedCouponsDialog() }
+
+        binding.checkoutActiveCouponChip.setOnCloseIconClickListener { viewModel.removeCoupon() }
+        binding.checkoutCouponInputLayout.setEndIconOnClickListener {
+            (binding.checkoutCouponCodeEditText as? AutoCompleteTextView)?.showDropDown()
+        }
+
         binding.mockPaymentSwitch.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setMockPaymentSuccess(isChecked)
         }
 
         binding.placeOrderButton.setOnClickListener {
             viewModel.placeOrder()
+        }
+    }
+
+    private fun setupCouponSuggestions() {
+        val actv = binding.checkoutCouponCodeEditText as AutoCompleteTextView
+        suggestionsAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
+        actv.setAdapter(suggestionsAdapter)
+        actv.threshold = 0
+
+        actv.setOnItemClickListener { _, _, position, _ ->
+            val item = suggestionsAdapter?.getItem(position) ?: return@setOnItemClickListener
+            actv.setText(item, false)
+            actv.setSelection(item.length)
+            viewModel.updateCouponInput(item)
+            viewModel.applyCouponFromCheckout()
         }
     }
 
@@ -157,13 +189,11 @@ class CheckoutActivity : ComponentActivity() {
                     if (hasCoupon) {
                         val desc = coupon?.description?.takeIf { it.isNotBlank() }
                         val label = if (desc != null) {
-                            "Coupon: ${coupon.code} • $desc"
+                            "${coupon.code} • $desc"
                         } else {
-                            "Coupon: ${coupon?.code}"
+                            coupon?.code.orEmpty()
                         }
-                        binding.checkoutAppliedCouponText.text = label
-                    } else {
-                        binding.checkoutAppliedCouponText.text = "Coupon: -"
+                        binding.checkoutActiveCouponChip.text = label
                     }
                 }
             }
@@ -174,16 +204,50 @@ class CheckoutActivity : ComponentActivity() {
                 viewModel.couponValidationState.collectLatest { state ->
                     when (state) {
                         is CouponValidationState.None -> binding.checkoutCouponInputLayout.error = null
-                        is CouponValidationState.Valid -> {
-                            binding.checkoutCouponInputLayout.error = null
-                            Snackbar.make(binding.root, "Discount applied.", Snackbar.LENGTH_SHORT).show()
-                        }
+                        is CouponValidationState.Valid -> binding.checkoutCouponInputLayout.error = null
                         is CouponValidationState.PendingServerValidation -> binding.checkoutCouponInputLayout.error = null
                         is CouponValidationState.Invalid -> {
+                            // Inline rule error; preserve typed code.
                             binding.checkoutCouponInputLayout.error = state.message
-                            Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG).show()
                         }
                     }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.lastCouponUxFeedback.collectLatest { fb ->
+                    when (fb.type) {
+                        CouponUxFeedback.Type.NONE -> {
+                            binding.checkoutCouponHelperText.isVisible = false
+                            binding.checkoutCouponHelperText.text = ""
+                        }
+                        CouponUxFeedback.Type.APPLIED -> {
+                            val discount = viewModel.totals.value.discount
+                            val discountText =
+                                if (discount > 0.00001) "Saved $" + String.format(Locale.US, "%.2f", discount) else "Coupon applied"
+                            binding.checkoutCouponHelperText.isVisible = true
+                            binding.checkoutCouponHelperText.text = discountText
+                        }
+                        CouponUxFeedback.Type.INVALID_RULE -> {
+                            binding.checkoutCouponHelperText.isVisible = true
+                            binding.checkoutCouponHelperText.text = fb.message
+                        }
+                        CouponUxFeedback.Type.NETWORK -> {
+                            binding.checkoutCouponHelperText.isVisible = false
+                        }
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.couponSuggestions.collectLatest { list ->
+                    suggestionsAdapter?.clear()
+                    suggestionsAdapter?.addAll(list)
+                    suggestionsAdapter?.notifyDataSetChanged()
                 }
             }
         }
@@ -220,6 +284,7 @@ class CheckoutActivity : ComponentActivity() {
                         }
 
                         is CheckoutViewModel.SubmitState.Error -> {
+                            // Keep snackbars for order submission errors.
                             Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG)
                                 .setAction("Retry") { viewModel.placeOrder() }
                                 .show()
@@ -247,6 +312,37 @@ class CheckoutActivity : ComponentActivity() {
             for (i in 0 until root.childCount) {
                 setAllEnabled(root.getChildAt(i), enabled)
             }
+        }
+    }
+
+    private fun showManageSavedCouponsDialog() {
+        val ctx = this
+        val rv = RecyclerView(ctx).apply { layoutManager = LinearLayoutManager(ctx) }
+
+        val adapter = SavedCouponsAdapter(
+            onSelect = { code ->
+                binding.checkoutCouponCodeEditText.setText(code)
+                viewModel.updateCouponInput(code)
+                viewModel.applyCouponFromCheckout()
+            },
+            onRemove = { code ->
+                viewModel.removeSavedCoupon(code)
+            }
+        )
+        rv.adapter = adapter
+        adapter.submitList(viewModel.savedCoupons.value)
+
+        val dialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle("Saved coupons")
+            .setView(rv)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Clear all") { _, _ ->
+                viewModel.clearSavedCoupons()
+            }
+            .show()
+
+        dialog.setOnShowListener {
+            adapter.submitList(viewModel.savedCoupons.value)
         }
     }
 }

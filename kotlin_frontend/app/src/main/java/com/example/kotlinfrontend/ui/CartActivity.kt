@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import androidx.activity.ComponentActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
@@ -18,6 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.kotlinfrontend.R
 import com.example.kotlinfrontend.data.CartErrorEvent
+import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
 import com.example.kotlinfrontend.databinding.ActivityCartBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -30,6 +33,8 @@ class CartActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityCartBinding
     private lateinit var viewModel: CartViewModel
+
+    private var suggestionsAdapter: ArrayAdapter<String>? = null
 
     // Tracks currently-swiped deletion so undo can restore original quantity.
     private var pendingUndo: PendingUndo? = null
@@ -51,6 +56,7 @@ class CartActivity : ComponentActivity() {
         setupToolbar()
         setupRecycler()
         setupActions()
+        setupCouponSuggestions()
         bindState()
         bindErrorsAndIdentity()
         bindCouponUi()
@@ -182,9 +188,7 @@ class CartActivity : ComponentActivity() {
             }
         }
 
-        binding.browseProductsButton.setOnClickListener {
-            finish()
-        }
+        binding.browseProductsButton.setOnClickListener { finish() }
 
         // Coupon actions
         binding.applyCouponButton.setOnClickListener {
@@ -193,6 +197,34 @@ class CartActivity : ComponentActivity() {
         }
         binding.removeCouponButton.setOnClickListener {
             viewModel.removeCoupon()
+        }
+
+        binding.manageSavedCouponsButton.setOnClickListener {
+            showManageSavedCouponsDialog()
+        }
+
+        binding.activeCouponChip.setOnCloseIconClickListener {
+            viewModel.removeCoupon()
+        }
+
+        binding.couponInputLayout.setEndIconOnClickListener {
+            // Show dropdown suggestions even if the user hasn't typed yet.
+            (binding.couponCodeEditText as? AutoCompleteTextView)?.showDropDown()
+        }
+    }
+
+    private fun setupCouponSuggestions() {
+        val actv = binding.couponCodeEditText as AutoCompleteTextView
+        suggestionsAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
+        actv.setAdapter(suggestionsAdapter)
+        actv.threshold = 0
+
+        // Selecting a suggestion fills input and attempts validation.
+        actv.setOnItemClickListener { _, _, position, _ ->
+            val item = suggestionsAdapter?.getItem(position) ?: return@setOnItemClickListener
+            actv.setText(item, false)
+            actv.setSelection(item.length)
+            viewModel.applyCoupon(item)
         }
     }
 
@@ -268,6 +300,16 @@ class CartActivity : ComponentActivity() {
                 }
             }
         }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.couponSuggestions.collectLatest { list ->
+                    suggestionsAdapter?.clear()
+                    suggestionsAdapter?.addAll(list)
+                    suggestionsAdapter?.notifyDataSetChanged()
+                }
+            }
+        }
     }
 
     private fun bindCouponUi() {
@@ -281,14 +323,16 @@ class CartActivity : ComponentActivity() {
                     if (hasCoupon) {
                         val desc = coupon?.description?.takeIf { it.isNotBlank() }
                         val label = if (desc != null) {
-                            "Coupon: ${coupon.code} • $desc"
+                            "${coupon.code} • $desc"
                         } else {
-                            "Coupon: ${coupon?.code}"
+                            coupon?.code.orEmpty()
                         }
-                        binding.appliedCouponText.text = label
-                        binding.couponCodeEditText.setText(coupon?.code.orEmpty())
-                    } else {
-                        binding.appliedCouponText.text = "Coupon: -"
+                        binding.activeCouponChip.text = label
+                        // Preserve user typed text on invalid; but on confirmed coupon state, keep it in sync.
+                        if (binding.couponCodeEditText.text?.toString() != coupon?.code) {
+                            binding.couponCodeEditText.setText(coupon?.code.orEmpty())
+                            binding.couponCodeEditText.setSelection(binding.couponCodeEditText.text?.length ?: 0)
+                        }
                     }
                 }
             }
@@ -301,19 +345,54 @@ class CartActivity : ComponentActivity() {
                         is CouponValidationState.None -> {
                             binding.couponInputLayout.error = null
                         }
+
                         is CouponValidationState.Valid -> {
                             binding.couponInputLayout.error = null
-                            Snackbar.make(binding.root, "Discount applied.", Snackbar.LENGTH_SHORT).show()
+                            // No snackbar here; keep it subtle and use helper text.
                             announceForA11y(binding.root, "Discount applied.")
                         }
+
                         is CouponValidationState.PendingServerValidation -> {
                             // No inline error; keep it subtle.
                             binding.couponInputLayout.error = null
                         }
+
                         is CouponValidationState.Invalid -> {
+                            // Inline error only; keep typed code.
                             binding.couponInputLayout.error = state.message
-                            Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG).show()
                             announceForA11y(binding.root, "Coupon invalid.")
+                        }
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.lastCouponUxFeedback.collectLatest { fb ->
+                    when (fb.type) {
+                        CouponUxFeedback.Type.NONE -> {
+                            binding.couponHelperText.isVisible = false
+                            binding.couponHelperText.text = ""
+                        }
+
+                        CouponUxFeedback.Type.APPLIED -> {
+                            // Show a helpful summary including discount amount if available.
+                            val discount = viewModel.totals.value.discount
+                            val discountText =
+                                if (discount > 0.00001) "Saved $" + String.format(Locale.US, "%.2f", discount) else "Coupon applied"
+                            binding.couponHelperText.isVisible = true
+                            binding.couponHelperText.text = discountText
+                        }
+
+                        CouponUxFeedback.Type.INVALID_RULE -> {
+                            binding.couponHelperText.isVisible = true
+                            binding.couponHelperText.text = fb.message
+                        }
+
+                        CouponUxFeedback.Type.NETWORK -> {
+                            // Network should still be snackbars; keep helper hidden.
+                            binding.couponHelperText.isVisible = false
                         }
                     }
                 }
@@ -342,6 +421,7 @@ class CartActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.errorEvents.collectLatest { event ->
+                    // Snackbars are reserved for transient network/server operational failures.
                     val snack = Snackbar.make(binding.root, event.message, Snackbar.LENGTH_LONG)
 
                     val canRetry = when (event.operation) {
@@ -359,6 +439,7 @@ class CartActivity : ComponentActivity() {
                                     val code = binding.couponCodeEditText.text?.toString().orEmpty()
                                     viewModel.applyCoupon(code)
                                 }
+
                                 CartErrorEvent.Operation.REMOVE_COUPON -> viewModel.removeCoupon()
                                 else -> Unit
                             }
@@ -367,6 +448,42 @@ class CartActivity : ComponentActivity() {
                     snack.show()
                 }
             }
+        }
+    }
+
+    private fun showManageSavedCouponsDialog() {
+        val ctx = this
+        val rv = RecyclerView(ctx).apply {
+            layoutManager = LinearLayoutManager(ctx)
+        }
+
+        val adapter = SavedCouponsAdapter(
+            onSelect = { code ->
+                binding.couponCodeEditText.setText(code)
+                (binding.couponCodeEditText as? AutoCompleteTextView)?.dismissDropDown()
+                viewModel.applyCoupon(code)
+            },
+            onRemove = { code ->
+                viewModel.removeSavedCoupon(code)
+            }
+        )
+        rv.adapter = adapter
+
+        // Initial list + keep updated while dialog open via a single snapshot at creation.
+        adapter.submitList(viewModel.savedCoupons.value)
+
+        val dialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle("Saved coupons")
+            .setView(rv)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Clear all") { _, _ ->
+                viewModel.clearSavedCoupons()
+            }
+            .show()
+
+        // Refresh list when dialog is shown (in case it changed between click and show).
+        dialog.setOnShowListener {
+            adapter.submitList(viewModel.savedCoupons.value)
         }
     }
 

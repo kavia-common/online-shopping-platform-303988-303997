@@ -80,6 +80,24 @@ The cart supports applying/removing a **coupon code**:
   - Discount (when a coupon is applied)
   - Total (subtotal - discount; tax is currently a placeholder)
 
+#### Saved coupons + suggestions (polished UX)
+The app stores a small list of **recently used** coupon codes locally on-device:
+- Stored via `SavedCouponsStore` (SharedPreferences + Moshi JSON)
+- Most-recent-first, de-duped by code (case-insensitive)
+- Default limit: **8** codes (edit `SavedCouponsStore.DEFAULT_MAX_ITEMS`)
+
+In **Cart** and **Checkout**:
+- The coupon field is an **autocomplete dropdown** (Material exposed dropdown using `AutoCompleteTextView`)
+- Suggestions are sourced from:
+  - local saved coupons (always)
+  - (future) server suggestions if/when the backend adds them — the UI and repository are designed to merge them, but currently the flow is local-only
+- Selecting a suggestion fills the field and attempts to validate/apply immediately.
+
+#### Clearer coupon validation feedback
+- **Rule violations** (min subtotal, category restrictions, usage exhausted, expired, invalid code) are shown as **inline errors/helper text** under the coupon field.
+- **Transient failures** (network/server operational issues) still appear as **Snackbars** with **Retry**.
+- The typed coupon code is preserved in the field when validation fails.
+
 #### Backend validation behavior
 When an identity email is available, the app will **attempt** to validate/apply the coupon with backend endpoints if they exist.
 

@@ -7,6 +7,15 @@
         android:label="Kotlin Frontend"
         android:supportsRtl="true"
         android:theme="@style/Theme.KotlinFrontend">
+
+        <activity
+            android:name=".ui.OrderConfirmationActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.CheckoutActivity"
+            android:exported="false" />
+
         <activity
             android:name=".ui.OrdersActivity"
             android:exported="false" />

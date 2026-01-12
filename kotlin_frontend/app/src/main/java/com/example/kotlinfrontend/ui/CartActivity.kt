@@ -1,5 +1,7 @@
 package com.example.kotlinfrontend.ui
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
@@ -164,13 +166,54 @@ class CartActivity : ComponentActivity() {
         }
 
         binding.checkoutButton.setOnClickListener {
-            Snackbar.make(binding.root, "Checkout is not implemented yet.", Snackbar.LENGTH_LONG).show()
+            // If identity email is missing, prompt here to align with CartIdentity flow.
+            val email = viewModel.activeEmail.value
+            if (email.isNullOrBlank()) {
+                CartIdentityPrompter.promptForEmail(
+                    context = this@CartActivity,
+                    title = "Enter email to checkout",
+                    message = "We use email as a temporary identity for your cart and order.",
+                    prefill = null,
+                    onEmailSaved = { entered ->
+                        viewModel.setActiveEmail(entered)
+                        openCheckout()
+                    }
+                )
+            } else {
+                openCheckout()
+            }
         }
 
         binding.browseProductsButton.setOnClickListener {
             // Navigate back to product list (simple and consistent with current nav approach).
             finish()
         }
+    }
+
+    private fun openCheckout() {
+        startActivityForResult(Intent(this, CheckoutActivity::class.java), REQUEST_CHECKOUT)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_CHECKOUT && resultCode == Activity.RESULT_OK) {
+            val placed = data?.getBooleanExtra(CheckoutNav.RESULT_EXTRA_ORDER_PLACED, false) == true
+            val orderId = data?.getStringExtra(CheckoutNav.RESULT_EXTRA_ORDER_ID)
+            if (placed) {
+                val msg = if (!orderId.isNullOrBlank()) "Order placed: $orderId" else "Order placed."
+                Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG)
+                    .setAction("View orders") {
+                        startActivity(Intent(this, OrdersActivity::class.java))
+                    }
+                    .show()
+            }
+        }
+    }
+
+    private companion object {
+        private const val REQUEST_CHECKOUT = 1001
     }
 
     private fun bindState() {

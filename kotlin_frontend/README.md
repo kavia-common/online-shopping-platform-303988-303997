@@ -57,7 +57,7 @@ This module implements **lazy loading / infinite scroll** for the product list u
     - A Snackbar offers **Undo** (restores the previous quantity)
   - Use **Remove** for a single item
   - Use **Clear cart** to remove all items
-  - Tap **Checkout** to see a stub action (not implemented)
+  - Tap **Checkout** to place an order using the backend Order APIs
 
 ### Cart persistence + backend sync (per user)
 Cart is now **backend-synced** and persisted **per user identity** (temporary email):
@@ -122,6 +122,17 @@ Edit:
 - `data/ProductPagingSource.kt` – loads pages using query + filters
 - `data/ProductRepository.kt` – fake data source that applies search/filter locally (ready to swap with API later)
 - `model/ProductFilter.kt` – filter state model
+
+## Checkout flow (new)
+
+From the Cart screen:
+- Tap **Checkout**
+- Fill required fields (name, email, shipping address)
+- Payment is a **mock** toggle: keep **Mock payment success** enabled to proceed
+- Tap **Place order**
+  - On success the cart is cleared locally and an **Order confirmation** screen is shown
+  - Tap **View orders** to open the Orders list
+  - When returning to Cart, a Snackbar confirms the order (with a quick link to Orders)
 
 ## Backend API configuration
 

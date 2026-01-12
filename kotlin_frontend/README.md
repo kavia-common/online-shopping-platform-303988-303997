@@ -53,6 +53,8 @@ This module implements **lazy loading / infinite scroll** for the product list u
 - In the cart:
   - Items are **grouped by category**
   - Use **+ / -** to update quantity (decrement to 0 removes the item)
+  - **Swipe left/right** on an item row to **delete** it
+    - A Snackbar offers **Undo** (restores the previous quantity)
   - Use **Remove** for a single item
   - Use **Clear cart** to remove all items
   - Tap **Checkout** to see a stub action (not implemented)
@@ -78,8 +80,11 @@ Cart data is stored locally on-device using **SharedPreferences + JSON**, so it 
 
 ## UI polish (animations, chips, illustrated states)
 This module includes subtle UI polish while preserving Paging 3 behavior (no full-screen flicker during refresh):
-- **RecyclerView animations**: lightweight item appear animation + diff-friendly `DefaultItemAnimator` with `supportsChangeAnimations=false`.
-- **Crossfades** between list/loading/empty/error containers.
+- **Cart swipe-to-delete** using `ItemTouchHelper` with **Undo** via Snackbar (restores previous quantity).
+- **RecyclerView animations**:
+  - lightweight per-item **appear** (fade + small translate) on bind
+  - default add/remove animations via `DefaultItemAnimator` with `supportsChangeAnimations=false` to reduce flicker on quantity updates
+- **Crossfades** between list/empty containers on the Cart screen (and list/loading/empty/error containers elsewhere).
 - **Chip styling** tuned to the Ocean Professional theme:
   - price preset chips use `Widget.KotlinFrontend.Chip.Choice`
   - active filter chips use `Widget.KotlinFrontend.Chip.Filter`
@@ -90,6 +95,12 @@ Edit these integer resources:
 - `app/src/main/res/values/styles.xml`
   - `anim_crossfade_duration_ms`
   - `anim_item_appear_duration_ms`
+
+### Edit the Cart empty illustration
+- Cart empty illustration vector:
+  - `app/src/main/res/drawable/illustration_empty_cart.xml`
+- Cart empty UI copy/CTA:
+  - `app/src/main/res/layout/activity_cart.xml` (`emptyState` container)
 
 ### Adjust chip styles
 Edit:

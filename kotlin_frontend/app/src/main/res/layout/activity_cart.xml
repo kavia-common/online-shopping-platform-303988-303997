@@ -34,26 +34,37 @@
         app:layout_constraintRight_toRightOf="parent">
 
         <ImageView
-            android:layout_width="180dp"
-            android:layout_height="180dp"
+            android:id="@+id/emptyIllustration"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
             android:contentDescription="Empty cart illustration"
-            android:src="@drawable/illustration_empty_results" />
+            android:src="@drawable/illustration_empty_cart" />
 
         <TextView
+            android:id="@+id/emptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="Your cart is empty."
+            android:text="Your cart is empty"
             android:textColor="@color/ocean_text"
             android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/emptyMessage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Add items from the product list."
+            android:text="Add something you love—then come back to check out."
             android:textColor="@color/ocean_text" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/browseProductsButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:minHeight="44dp"
+            android:text="Browse products" />
     </LinearLayout>
 
     <!-- Main content when cart has items -->

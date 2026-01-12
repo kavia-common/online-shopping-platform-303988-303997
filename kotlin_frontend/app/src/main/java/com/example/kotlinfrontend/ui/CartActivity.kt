@@ -2,13 +2,18 @@ package com.example.kotlinfrontend.ui
 
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
+import android.view.accessibility.AccessibilityEvent
 import androidx.activity.ComponentActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.DefaultItemAnimator
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.kotlinfrontend.R
 import com.example.kotlinfrontend.databinding.ActivityCartBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -20,6 +25,15 @@ class CartActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityCartBinding
     private lateinit var viewModel: CartViewModel
+
+    // Tracks currently-swiped deletion so undo can restore original quantity.
+    private var pendingUndo: PendingUndo? = null
+
+    data class PendingUndo(
+        val productId: String,
+        val name: String,
+        val previousQuantity: Int
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +65,11 @@ class CartActivity : ComponentActivity() {
             onDecrement = { item ->
                 val newQty = item.quantity - 1
                 viewModel.updateQty(item.productId, newQty)
-                Snackbar.make(binding.root, if (newQty <= 0) "Removed item." else "Updated quantity.", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(
+                    binding.root,
+                    if (newQty <= 0) "Removed item." else "Updated quantity.",
+                    Snackbar.LENGTH_SHORT
+                ).show()
             },
             onRemove = { item ->
                 viewModel.removeItem(item.productId)
@@ -61,7 +79,73 @@ class CartActivity : ComponentActivity() {
 
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
-        binding.recyclerView.itemAnimator = null
+
+        // Use default animator; disable change animations to avoid flicker on qty updates.
+        (binding.recyclerView.itemAnimator as? DefaultItemAnimator)?.supportsChangeAnimations = false
+
+        attachSwipeToDelete(binding.recyclerView, adapter)
+    }
+
+    private fun attachSwipeToDelete(recyclerView: RecyclerView, adapter: CartAdapter) {
+        val touchCallback = object : ItemTouchHelper.SimpleCallback(
+            0,
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+        ) {
+            override fun onMove(
+                rv: RecyclerView,
+                vh: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                return false
+            }
+
+            override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int {
+                // Only item rows are swipeable; headers should not swipe.
+                val pos = vh.bindingAdapterPosition
+                return if (adapter.getCartItemAt(pos) != null) {
+                    super.getSwipeDirs(rv, vh)
+                } else {
+                    0
+                }
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val pos = viewHolder.bindingAdapterPosition
+                val item = adapter.getCartItemAt(pos)
+                if (item == null) {
+                    adapter.notifyItemChanged(pos)
+                    return
+                }
+
+                // Remove from repo (maintains existing contracts + badge behavior via existing flows).
+                pendingUndo = PendingUndo(
+                    productId = item.productId,
+                    name = item.name,
+                    previousQuantity = item.quantity
+                )
+
+                viewModel.removeItem(item.productId)
+
+                announceForA11y(binding.root, "Removed ${item.name}. Undo available.")
+
+                Snackbar.make(binding.root, "Removed ${item.name}", Snackbar.LENGTH_LONG)
+                    .setAction("Undo") {
+                        val undo = pendingUndo ?: return@setAction
+                        // Restore previous quantity for the same productId.
+                        viewModel.updateQty(undo.productId, undo.previousQuantity)
+                        announceForA11y(binding.root, "Restored ${undo.name}.")
+                    }
+                    .addCallback(object : Snackbar.Callback() {
+                        override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                            // If it timed out or was dismissed, clear pending state.
+                            pendingUndo = null
+                        }
+                    })
+                    .show()
+            }
+        }
+
+        ItemTouchHelper(touchCallback).attachToRecyclerView(recyclerView)
     }
 
     private fun setupActions() {
@@ -82,18 +166,26 @@ class CartActivity : ComponentActivity() {
         binding.checkoutButton.setOnClickListener {
             Snackbar.make(binding.root, "Checkout is not implemented yet.", Snackbar.LENGTH_LONG).show()
         }
+
+        binding.browseProductsButton.setOnClickListener {
+            // Navigate back to product list (simple and consistent with current nav approach).
+            finish()
+        }
     }
 
     private fun bindState() {
         val adapter = binding.recyclerView.adapter as CartAdapter
+        val crossfadeDuration = animDuration(R.integer.anim_crossfade_duration_ms)
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.groupedRows.collectLatest { rows ->
                     adapter.submitList(rows)
+
                     val isEmpty = rows.isEmpty()
-                    binding.emptyState.isVisible = isEmpty
-                    binding.contentContainer.isVisible = !isEmpty
+                    // Crossfade between empty and content to avoid full-screen flicker during refreshes.
+                    crossfadeVisibility(binding.emptyState, show = isEmpty, durationMs = crossfadeDuration)
+                    crossfadeVisibility(binding.contentContainer, show = !isEmpty, durationMs = crossfadeDuration)
                 }
             }
         }
@@ -152,6 +244,11 @@ class CartActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun announceForA11y(view: View, message: String) {
+        view.announceForAccessibility(message)
+        view.sendAccessibilityEvent(AccessibilityEvent.TYPE_ANNOUNCEMENT)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

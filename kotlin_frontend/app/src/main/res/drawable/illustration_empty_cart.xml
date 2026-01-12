@@ -1,0 +1,46 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+
+    <!-- Soft background blob -->
+    <path
+        android:fillColor="#EAF2FF"
+        android:pathData="M120,18C162.1,18 198,46.5 210.3,85.5C221.6,121.4 206.4,163.6 175.4,187.7C145.2,211.2 99.8,224.4 64.8,206.5C30.8,189.1 18,147.5 22.7,110.2C27.8,69.9 60.7,18 120,18Z" />
+
+    <!-- Subtle accent dots -->
+    <path
+        android:fillColor="#FDE8C7"
+        android:pathData="M54,62m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <path
+        android:fillColor="#D7E6FF"
+        android:pathData="M186,74m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+
+    <!-- Cart body -->
+    <path
+        android:fillColor="#2563EB"
+        android:fillAlpha="0.10"
+        android:pathData="M72,90h116c3.3,0 6,2.7 6,6c0,0.6 -0.1,1.2 -0.3,1.8l-14,46c-0.8,2.5 -3.1,4.2 -5.7,4.2H94c-2.7,0 -5,-1.8 -5.8,-4.4l-13.8,-47.2c-0.2,-0.5 -0.3,-1.1 -0.3,-1.6c0,-3.3 2.7,-6 6,-6Z" />
+
+    <!-- Cart outline -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M56,70c-3.3,0 -6,2.7 -6,6c0,3.3 2.7,6 6,6h8l15.6,56.6c1.5,5.5 6.5,9.4 12.2,9.4h84.8c5.6,0 10.6,-3.7 12.2,-9.1L214,97.6c0.3,-0.9 0.4,-1.9 0.4,-2.9c0,-6.6 -5.4,-12 -12,-12H78.3l-1.5,-5.4C75.3,72.9 71.1,70 66.6,70H56Zm22.9,24h123.5l-12.1,40.7c-0.3,1 -1.2,1.7 -2.2,1.7H92c-1,0 -1.9,-0.7 -2.2,-1.7L78.9,94Z" />
+
+    <!-- Wheels -->
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M98,168m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" />
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M178,168m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" />
+
+    <!-- A small "plus" badge hinting "add items" -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M166,46m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M164.7,38h2.6c1,0 1.8,0.8 1.8,1.8v6.1h6.1c1,0 1.8,0.8 1.8,1.8v2.6c0,1 -0.8,1.8 -1.8,1.8h-6.1v6.1c0,1 -0.8,1.8 -1.8,1.8h-2.6c-1,0 -1.8,-0.8 -1.8,-1.8v-6.1h-6.1c-1,0 -1.8,-0.8 -1.8,-1.8v-2.6c0,-1 0.8,-1.8 1.8,-1.8h6.1v-6.1c0,-1 0.8,-1.8 1.8,-1.8Z" />
+</vector>

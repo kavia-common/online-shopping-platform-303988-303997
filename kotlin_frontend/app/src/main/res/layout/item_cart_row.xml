@@ -5,6 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="10dp"
+    android:focusable="true"
+    android:importantForAccessibility="yes"
     app:cardCornerRadius="14dp"
     app:cardElevation="2dp"
     app:cardUseCompatPadding="true"
@@ -76,6 +78,7 @@
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
+                android:contentDescription="Decrease quantity"
                 android:minHeight="40dp"
                 android:text="-" />
 
@@ -93,6 +96,7 @@
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
+                android:contentDescription="Increase quantity"
                 android:minHeight="40dp"
                 android:text="+" />
 
@@ -106,6 +110,7 @@
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:contentDescription="Remove item from cart"
                 android:minHeight="40dp"
                 android:text="Remove" />
         </LinearLayout>

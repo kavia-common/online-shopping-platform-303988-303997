@@ -4,20 +4,34 @@ This module implements **lazy loading / infinite scroll** for the product list u
 
 ## Features implemented
 - Infinite scroll / paging (efficient incremental fetch)
+- Search + filter integrated with paging:
+  - Search field (debounced ~300ms)
+  - Category filter (dropdown)
+  - Price filter (chips)
+  - Search/filter changes recreate the `PagingSource` and refresh results efficiently
 - Loading states:
   - Fullscreen initial loading (when list empty)
   - Footer loading (when appending)
+  - Inline “Updating results…” spinner when a new query loads while list already has items
 - Error states:
   - Fullscreen initial error with Retry
   - Footer append error with Retry
-- Pull-to-refresh (SwipeRefreshLayout) wired to `PagingDataAdapter.refresh()`
-- Empty state when no items are returned
+- Pull-to-refresh (SwipeRefreshLayout) wired to `PagingDataAdapter.refresh()`:
+  - Re-runs the current query + filters
+- Empty state that reflects active search/filter (e.g., “No results for ‘<query>’”)
+
+## How to use (in the app)
+- Type in the search box to update results (debounced).
+- Choose a category from the dropdown.
+- Pick a price range chip (or select “Any”).
+- Pull-to-refresh will reload using the current search + filters.
 
 ## Where to look
-- `ui/ProductListActivity.kt` – wires UI, refresh/retry, load state handling
-- `ui/ProductListViewModel.kt` – Pager config (pageSize, prefetchDistance, etc.)
-- `data/ProductPagingSource.kt` – page fetching logic
-- `data/ProductRepository.kt` – currently a stub data source (replace with real API later)
+- `ui/ProductListActivity.kt` – UI wiring for search/filters, refresh/retry, load state handling
+- `ui/ProductListViewModel.kt` – StateFlow for search/filter and `Flow<PagingData<Product>>` via `Pager`
+- `data/ProductPagingSource.kt` – loads pages using query + filters
+- `data/ProductRepository.kt` – fake data source that applies search/filter locally (ready to swap with API later)
+- `model/ProductFilter.kt` – filter state model
 
 ## Note about Gradle wrapper
 This repo includes `gradlew` scripts and `gradle-wrapper.properties`, but **does not** include `gradle-wrapper.jar`.

@@ -17,6 +17,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize repository persistence early so state is restored before Fragments observe it.
+        org.example.app.data.ShopRepository.initialize(applicationContext)
+
         // Single-activity host layout: toolbar + NavHostFragment + footer
         setContentView(R.layout.activity_main)
 

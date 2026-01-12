@@ -25,6 +25,7 @@
     <string name="sort_name_a_to_z">Name: A–Z</string>
 
     <string name="catalog_empty_results">No products match your search.</string>
+    <string name="recent_searches">Recent searches</string>
 
     <string name="add_to_cart">Add to Cart</string>
     <string name="go_to_cart">Go to Cart</string>

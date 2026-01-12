@@ -74,7 +74,17 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
         setupDebouncedSearch()
 
-        refreshProducts()
+        // Restore last search (if any) to make search feel continuous across restarts.
+        // We only pre-fill if user hasn't typed anything already.
+        val lastQuery = ShopRepository.getRecentSearches().firstOrNull().orEmpty()
+        if (searchQuery.isBlank() && lastQuery.isNotBlank()) {
+            searchQuery = lastQuery
+            // setText triggers the TextWatcher; this is desired to refresh + record consistently.
+            etSearch.setText(lastQuery)
+            etSearch.setSelection(lastQuery.length)
+        } else {
+            refreshProducts()
+        }
     }
 
     override fun onDestroyView() {
@@ -111,6 +121,9 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                         // Ensure we only refresh when the view is still attached.
                         if (view != null && isAdded) {
                             refreshProducts()
+
+                            // Persist the query as a "recent search" after debounce (i.e., on "search execution").
+                            ShopRepository.recordSearchQuery(searchQuery, maxItems = 5)
                         }
                     }
                     mainHandler.postDelayed(pendingSearchRunnable!!, 250L)

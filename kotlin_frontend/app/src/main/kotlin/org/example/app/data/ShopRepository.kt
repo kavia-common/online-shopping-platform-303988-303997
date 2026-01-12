@@ -1,12 +1,14 @@
 package org.example.app.data
 
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 
 /**
- * Singleton in-memory repository providing:
+ * Singleton repository providing:
  * - Mock catalog/categories
  * - Observable cart state (LiveData) shared across fragments
+ * - Lightweight local persistence for cart + recent searches
  */
 object ShopRepository {
 
@@ -30,38 +32,82 @@ object ShopRepository {
 
     private val cartState = MutableLiveData<Map<String, Int>>(emptyMap())
 
+    // Local persistence (initialized from Application context).
+    private var localStore: LocalStore? = null
+    private var isInitialized: Boolean = false
+
+    // Recent searches (most-recent-first), kept in-memory and persisted.
+    private val recentSearches: MutableList<String> = mutableListOf()
+
+    // PUBLIC_INTERFACE
     fun getCategories(): List<Category> = categories
 
+    // PUBLIC_INTERFACE
     fun getAllProducts(): List<Product> = products
 
+    // PUBLIC_INTERFACE
     fun findProductById(productId: String): Product? = products.firstOrNull { it.id == productId }
 
+    // PUBLIC_INTERFACE
     fun getCategoryName(categoryId: String): String {
         return categories.firstOrNull { it.id == categoryId }?.name ?: "Unknown"
     }
 
+    /**
+     * Initializes the repository with an Application context and restores persisted state.
+     *
+     * Important: This should be called once early (e.g., MainActivity.onCreate) so
+     * restoration happens before Fragments start observing LiveData.
+     */
+    // PUBLIC_INTERFACE
+    fun initialize(context: Context) {
+        if (isInitialized) return
+
+        localStore = LocalStore(context.applicationContext)
+
+        // Restore cart BEFORE any observers are likely registered.
+        val restoredCart = localStore?.readCart().orEmpty()
+        cartMap.clear()
+        cartMap.putAll(restoredCart)
+        cartState.value = cartMap.toMap()
+
+        // Restore recent searches for catalog recall.
+        recentSearches.clear()
+        recentSearches.addAll(localStore?.readRecentSearches().orEmpty())
+
+        isInitialized = true
+    }
+
+    // PUBLIC_INTERFACE
     fun cartLiveData(): LiveData<Map<String, Int>> = cartState
 
+    // PUBLIC_INTERFACE
     fun addToCart(productId: String, quantityToAdd: Int = 1) {
         val existing = cartMap[productId] ?: 0
         cartMap[productId] = (existing + quantityToAdd).coerceAtLeast(0)
-        cartState.value = cartMap.toMap()
+        publishCart()
     }
 
+    // PUBLIC_INTERFACE
     fun setQuantity(productId: String, quantity: Int) {
         if (quantity <= 0) {
             cartMap.remove(productId)
         } else {
             cartMap[productId] = quantity
         }
-        cartState.value = cartMap.toMap()
+        publishCart()
     }
 
+    // PUBLIC_INTERFACE
     fun clearCart() {
         cartMap.clear()
-        cartState.value = emptyMap()
+        publishCart()
     }
 
+    /**
+     * Returns the current cart line items (computed from the internal map).
+     */
+    // PUBLIC_INTERFACE
     fun cartItems(): List<CartItem> {
         return cartMap.mapNotNull { (productId, qty) ->
             val p = findProductById(productId) ?: return@mapNotNull null
@@ -69,8 +115,45 @@ object ShopRepository {
         }
     }
 
+    // PUBLIC_INTERFACE
     fun cartTotalCents(): Int {
         return cartItems().sumOf { it.product.priceCents * it.quantity }
+    }
+
+    /**
+     * Returns recent search queries (most-recent-first).
+     */
+    // PUBLIC_INTERFACE
+    fun getRecentSearches(): List<String> = recentSearches.toList()
+
+    /**
+     * Records a search query into the recent list (de-duplicated, capped, most-recent-first)
+     * and persists it.
+     */
+    // PUBLIC_INTERFACE
+    fun recordSearchQuery(query: String, maxItems: Int = 5) {
+        val normalized = query.trim()
+        if (normalized.isBlank()) return
+
+        // De-duplicate (case-insensitive) while keeping the most recent version.
+        val existingIndex = recentSearches.indexOfFirst { it.equals(normalized, ignoreCase = true) }
+        if (existingIndex >= 0) {
+            recentSearches.removeAt(existingIndex)
+        }
+        recentSearches.add(0, normalized)
+
+        // Cap list.
+        while (recentSearches.size > maxItems) {
+            recentSearches.removeAt(recentSearches.lastIndex)
+        }
+
+        localStore?.writeRecentSearches(recentSearches)
+    }
+
+    private fun publishCart() {
+        cartState.value = cartMap.toMap()
+        // Persist every mutation. If initialize() hasn't been called yet, this is a no-op.
+        localStore?.writeCart(cartMap)
     }
 
     data class CartItem(

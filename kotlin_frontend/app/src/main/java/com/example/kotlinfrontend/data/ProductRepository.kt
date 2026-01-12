@@ -2,29 +2,24 @@ package com.example.kotlinfrontend.data
 
 import com.example.kotlinfrontend.model.Product
 import com.example.kotlinfrontend.model.ProductFilter
-import kotlin.math.min
-import kotlin.random.Random
+import com.example.kotlinfrontend.network.ApiClient
+import com.example.kotlinfrontend.network.ProductApi
+import com.example.kotlinfrontend.network.dto.ProductDto
+import kotlin.math.roundToInt
 
-class ProductRepository {
+class ProductRepository(
+    private val api: ProductApi = ApiClient.createProductApi()
+) {
 
     data class PageResult(
         val items: List<Product>,
         val totalCount: Int
     )
 
-    private val categories = listOf("Electronics", "Clothing", "Home", "Books")
-
-    private fun categoryForIndex(idx: Int): String = categories[idx % categories.size]
-
     /**
      * Fetch a page of products with optional search query and filters.
      *
-     * This is currently a local stub to demonstrate:
-     * - Paging 3 integration
-     * - Search + filter invalidation behavior
-     * - Load states (loading/error/empty)
-     *
-     * Replace this with a real network call later (Retrofit/OkHttp/etc).
+     * Paging 3 uses 0-based page indexes (Int keys), which maps directly to Spring Pageable "page".
      */
     suspend fun fetchProductsPage(
         pageIndex: Int,
@@ -32,67 +27,42 @@ class ProductRepository {
         searchQuery: String,
         filter: ProductFilter
     ): PageResult {
-        // Simulate latency
-        kotlinx.coroutines.delay(650)
+        val trimmedQuery = searchQuery.trim().ifBlank { null }
 
-        // Simulate occasional network-like failures (so retry paths can be verified)
-        if (Random.nextFloat() < 0.12f) {
-            throw RuntimeException("Network error while loading products. Please retry.")
-        }
+        // Our UI stores cents as Int; backend uses price as Double.
+        val minPrice = filter.minPriceCents?.let { it / 100.0 }
+        val maxPrice = filter.maxPriceCents?.let { it / 100.0 }
 
-        // Build a stable-ish fake dataset.
-        val all = buildAllProducts(totalCount = 200)
+        // Keep default sort stable; tweak later if needed.
+        val page = api.getProducts(
+            page = pageIndex,
+            size = pageSize,
+            sort = "createdAt,desc",
+            query = trimmedQuery,
+            category = filter.category,
+            minPrice = minPrice,
+            maxPrice = maxPrice
+        )
 
-        // Apply search + filter.
-        val trimmedQuery = searchQuery.trim()
-        val filtered = all.asSequence()
-            .filter { product ->
-                // Search over title and description
-                if (trimmedQuery.isBlank()) true
-                else {
-                    val q = trimmedQuery.lowercase()
-                    product.title.lowercase().contains(q) || product.description.lowercase().contains(q)
-                }
-            }
-            .filter { product ->
-                // Category filter (embedded in title for now; structured so it can become a real field later)
-                val category = extractCategoryFromTitle(product.title)
-                filter.category?.let { it == category } ?: true
-            }
-            .filter { product ->
-                filter.minPriceCents?.let { product.priceCents >= it } ?: true
-            }
-            .filter { product ->
-                filter.maxPriceCents?.let { product.priceCents <= it } ?: true
-            }
-            .toList()
+        val items = page.content.map { it.toDomain() }
+        val totalCount = page.totalElements.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
-        val start = pageIndex * pageSize
-        if (start >= filtered.size) {
-            return PageResult(emptyList(), filtered.size)
-        }
-        val endExclusive = min(start + pageSize, filtered.size)
-        val pageItems = filtered.subList(start, endExclusive)
-
-        return PageResult(pageItems, filtered.size)
+        return PageResult(items = items, totalCount = totalCount)
     }
+}
 
-    private fun buildAllProducts(totalCount: Int): List<Product> {
-        return (0 until totalCount).map { idx ->
-            val category = categoryForIndex(idx)
-            val priceCents = 999 + (idx * 13) % 2500
-            Product(
-                id = "prod_$idx",
-                title = "$category • Product #$idx",
-                description = "A minimal, modern product description for item #$idx in $category. Scroll to load more.",
-                priceCents = priceCents
-            )
-        }
-    }
+private fun ProductDto.toDomain(): Product {
+    // Some backends might return numeric ids; we defensively stringify nullable.
+    val safeId = (id ?: "").ifBlank { "unknown" }
 
-    private fun extractCategoryFromTitle(title: String): String {
-        // Title format: "<Category> • Product #n"
-        val split = title.split("•")
-        return split.firstOrNull()?.trim().orEmpty()
-    }
+    return Product(
+        id = safeId,
+        name = name,
+        description = description,
+        price = price,
+        category = category,
+        imageUrl = imageUrl,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
 }

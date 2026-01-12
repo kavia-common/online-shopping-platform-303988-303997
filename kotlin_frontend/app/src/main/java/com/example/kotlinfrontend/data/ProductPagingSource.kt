@@ -22,7 +22,10 @@ class ProductPagingSource(
                 filter = filter
             )
 
-            val nextKey = if (result.items.isEmpty()) null else pageIndex + 1
+            // If backend returns fewer than requested, we assume end-of-pagination.
+            val endOfPaginationReached = result.items.isEmpty() || result.items.size < pageSize
+
+            val nextKey = if (endOfPaginationReached) null else pageIndex + 1
             val prevKey = if (pageIndex == 0) null else pageIndex - 1
 
             LoadResult.Page(

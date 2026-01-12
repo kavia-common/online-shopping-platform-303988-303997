@@ -60,6 +60,20 @@ Edit:
 - `data/ProductRepository.kt` – fake data source that applies search/filter locally (ready to swap with API later)
 - `model/ProductFilter.kt` – filter state model
 
+## Backend API configuration
+
+This frontend is wired to call the Spring Boot `product-api` at:
+
+- Base URL: `http://localhost:3010` (default)
+- Endpoint: `GET /api/products` with paging + search/filters
+
+To change the base URL, edit:
+- `app/src/main/java/com/example/kotlinfrontend/network/ApiConfig.kt`
+
+### Note about Android emulator + localhost
+If you run the backend on your development machine and test on an Android emulator, `http://localhost:3010` will point to the emulator itself. In that case, you typically want:
+- `http://10.0.2.2:3010`
+
 ## Note about Gradle wrapper
 This repo includes `gradlew` scripts and `gradle-wrapper.properties`, but **does not** include `gradle-wrapper.jar`.
 If CI/build requires it, add the standard Gradle wrapper jar at:

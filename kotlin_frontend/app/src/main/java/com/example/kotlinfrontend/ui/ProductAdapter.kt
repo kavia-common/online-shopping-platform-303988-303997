@@ -28,7 +28,7 @@ class ProductAdapter :
         fun bind(item: Product?) {
             if (item == null) return
             binding.title.text = item.title
-            binding.description.text = item.description
+            binding.description.text = item.description.orEmpty()
             binding.price.text = item.priceText()
         }
     }

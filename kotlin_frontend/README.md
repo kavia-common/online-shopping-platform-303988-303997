@@ -62,13 +62,44 @@ Edit:
 
 ## Backend API configuration
 
-This frontend is wired to call the Spring Boot `product-api` at:
+This frontend is wired to call the Spring Boot APIs at:
 
 - Base URL: `http://localhost:3010` (default)
-- Endpoint: `GET /api/products` with paging + search/filters
+- Products: `GET /api/products` with paging + search/filters
+- Orders:
+  - `POST /api/orders` (create)
+  - `GET /api/orders` (paged history, optional filters)
+  - `GET /api/orders/{id}` (details)
+  - `POST /api/orders/{id}/pay|ship|deliver|cancel` (transitions)
 
 To change the base URL, edit:
 - `app/src/main/java/com/example/kotlinfrontend/network/ApiConfig.kt`
+
+## Orders screen (minimal)
+
+From the Products screen:
+- Tap **Create order (sample)** to create an order using a fixed payload (for end-to-end wiring).
+- Tap **Orders** to open the order history screen (Paging 3 list).
+
+### Backend verification via curl (examples)
+
+Create an order:
+```bash
+curl -X POST http://localhost:3010/api/orders \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "guest@example.com",
+    "items": [
+      { "productId": "sample-product-1", "quantity": 1 },
+      { "productId": "sample-product-2", "quantity": 2 }
+    ]
+  }'
+```
+
+List orders (page 0, size 20):
+```bash
+curl "http://localhost:3010/api/orders?page=0&size=20&sort=createdAt,desc"
+```
 
 ### Note about Android emulator + localhost
 If you run the backend on your development machine and test on an Android emulator, `http://localhost:3010` will point to the emulator itself. In that case, you typically want:

@@ -8,6 +8,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.KotlinFrontend">
         <activity
+            android:name=".ui.OrdersActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ProductListActivity"
             android:exported="true">
             <intent-filter>

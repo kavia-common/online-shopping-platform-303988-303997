@@ -1,5 +1,6 @@
 package com.example.kotlinfrontend.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -30,6 +31,7 @@ class ProductListActivity : ComponentActivity() {
     private lateinit var binding: ActivityProductListBinding
 
     private lateinit var viewModel: ProductListViewModel
+    private lateinit var orderViewModel: OrderViewModel
 
     // Backing store for preset CRUD
     private lateinit var presetStore: FilterPresetStore
@@ -43,6 +45,7 @@ class ProductListActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         viewModel = ViewModelProvider(this)[ProductListViewModel::class.java]
+        orderViewModel = ViewModelProvider(this)[OrderViewModel::class.java]
         presetStore = FilterPresetStore(this)
 
         binding = ActivityProductListBinding.inflate(layoutInflater)
@@ -57,6 +60,37 @@ class ProductListActivity : ComponentActivity() {
         setupRecyclerAnimations()
         setupSearchAndFilters(productAdapter)
         setupPresetsAndClearAll(productAdapter)
+
+        binding.openOrdersButton.setOnClickListener {
+            startActivity(Intent(this, OrdersActivity::class.java))
+        }
+
+        binding.createOrderButton.setOnClickListener {
+            // Minimal E2E hook: create order with a fixed sample payload, then jump to Orders.
+            orderViewModel.createOrderFromSample()
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                orderViewModel.lastCreatedOrderId.collectLatest { id ->
+                    if (!id.isNullOrBlank()) {
+                        Snackbar.make(binding.root, "Order created: #$id", Snackbar.LENGTH_LONG).show()
+                        startActivity(Intent(this@ProductListActivity, OrdersActivity::class.java))
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                orderViewModel.errorMessage.collectLatest { msg ->
+                    if (!msg.isNullOrBlank()) {
+                        Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
+                        orderViewModel.clearError()
+                    }
+                }
+            }
+        }
 
         // Pull-to-refresh triggers a paging refresh (re-runs current query+filters; doesn't over-fetch).
         binding.swipeRefresh.setOnRefreshListener {

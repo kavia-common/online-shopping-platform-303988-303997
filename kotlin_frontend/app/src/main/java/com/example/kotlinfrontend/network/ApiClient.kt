@@ -9,11 +9,7 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    // PUBLIC_INTERFACE
-    fun createProductApi(
-        baseUrl: String = ApiConfig.DEFAULT_BASE_URL
-    ): ProductApi {
-        /** Create a ProductApi instance using the provided baseUrl. */
+    private fun createRetrofit(baseUrl: String): Retrofit {
         val moshi = Moshi.Builder().build()
 
         val logging = HttpLoggingInterceptor().apply {
@@ -28,12 +24,26 @@ object ApiClient {
             .addInterceptor(logging)
             .build()
 
-        val retrofit = Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttp)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
+    }
 
-        return retrofit.create(ProductApi::class.java)
+    // PUBLIC_INTERFACE
+    fun createProductApi(
+        baseUrl: String = ApiConfig.DEFAULT_BASE_URL
+    ): ProductApi {
+        /** Create a ProductApi instance using the provided baseUrl. */
+        return createRetrofit(baseUrl).create(ProductApi::class.java)
+    }
+
+    // PUBLIC_INTERFACE
+    fun createOrderApi(
+        baseUrl: String = ApiConfig.DEFAULT_BASE_URL
+    ): OrderApi {
+        /** Create an OrderApi instance using the provided baseUrl. */
+        return createRetrofit(baseUrl).create(OrderApi::class.java)
     }
 }

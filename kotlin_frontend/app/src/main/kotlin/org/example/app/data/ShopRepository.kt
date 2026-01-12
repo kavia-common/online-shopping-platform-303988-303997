@@ -150,6 +150,15 @@ object ShopRepository {
         localStore?.writeRecentSearches(recentSearches)
     }
 
+    /**
+     * Clears all recent searches and persists the empty list.
+     */
+    // PUBLIC_INTERFACE
+    fun clearRecentSearches() {
+        recentSearches.clear()
+        localStore?.writeRecentSearches(recentSearches)
+    }
+
     private fun publishCart() {
         cartState.value = cartMap.toMap()
         // Persist every mutation. If initialize() hasn't been called yet, this is a no-op.

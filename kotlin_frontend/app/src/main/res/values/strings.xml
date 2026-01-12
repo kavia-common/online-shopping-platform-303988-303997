@@ -26,6 +26,11 @@
 
     <string name="catalog_empty_results">No products match your search.</string>
     <string name="recent_searches">Recent searches</string>
+    <string name="clear">Clear</string>
+
+    <!-- Accessibility -->
+    <string name="cd_recent_search_chip">Recent search: %1$s</string>
+    <string name="cd_clear_recent_searches">Clear recent searches</string>
 
     <string name="add_to_cart">Add to Cart</string>
     <string name="go_to_cart">Go to Cart</string>

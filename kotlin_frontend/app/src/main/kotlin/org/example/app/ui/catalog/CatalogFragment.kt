@@ -6,6 +6,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.os.bundleOf
@@ -34,6 +35,12 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
     private lateinit var etSearch: TextInputEditText
 
+    // Recent searches UI
+    private lateinit var recentSearchesRow: LinearLayout
+    private lateinit var recentSearchesScroll: HorizontalScrollView
+    private lateinit var recentSearchesContainer: LinearLayout
+    private lateinit var btnClearRecentSearches: MaterialButton
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingSearchRunnable: Runnable? = null
 
@@ -50,6 +57,11 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         rvProducts = view.findViewById(R.id.rv_products)
         tvEmptyResults = view.findViewById(R.id.tv_empty_results)
         etSearch = view.findViewById(R.id.et_search)
+
+        recentSearchesRow = view.findViewById(R.id.recent_searches_row)
+        recentSearchesScroll = view.findViewById(R.id.recent_searches_scroll)
+        recentSearchesContainer = view.findViewById(R.id.recent_searches_container)
+        btnClearRecentSearches = view.findViewById(R.id.btn_clear_recent_searches)
 
         rvProducts.layoutManager = LinearLayoutManager(requireContext())
 
@@ -73,6 +85,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         }
 
         setupDebouncedSearch()
+        setupRecentSearchesUi()
 
         // Restore last search (if any) to make search feel continuous across restarts.
         // We only pre-fill if user hasn't typed anything already.
@@ -85,6 +98,9 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         } else {
             refreshProducts()
         }
+
+        // Ensure recent searches are shown immediately on entry (even before any new typing happens).
+        renderRecentSearches()
     }
 
     override fun onDestroyView() {
@@ -124,6 +140,9 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
                             // Persist the query as a "recent search" after debounce (i.e., on "search execution").
                             ShopRepository.recordSearchQuery(searchQuery, maxItems = 5)
+
+                            // Update the visible chips after persistence (so new searches appear immediately).
+                            renderRecentSearches()
                         }
                     }
                     mainHandler.postDelayed(pendingSearchRunnable!!, 250L)
@@ -232,7 +251,10 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
     private fun applySorting(products: List<Product>): List<Product> {
         return when (selectedSortOption) {
-            SortOption.RELEVANCE -> products.sortedWith(compareByDescending<Product> { relevanceScore(it) }.thenBy { it.name.lowercase(Locale.US) })
+            SortOption.RELEVANCE -> products.sortedWith(
+                compareByDescending<Product> { relevanceScore(it) }.thenBy { it.name.lowercase(Locale.US) }
+            )
+
             SortOption.PRICE_LOW_TO_HIGH -> products.sortedBy { it.priceCents }
             SortOption.PRICE_HIGH_TO_LOW -> products.sortedByDescending { it.priceCents }
             SortOption.NAME_A_TO_Z -> products.sortedBy { it.name.lowercase(Locale.US) }
@@ -269,5 +291,71 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
             categoryLower.contains(queryLower) -> 1
             else -> 0
         }
+    }
+
+    private fun setupRecentSearchesUi() {
+        btnClearRecentSearches.setOnClickListener {
+            // Immediate clear is acceptable per requirements.
+            ShopRepository.clearRecentSearches()
+            renderRecentSearches()
+        }
+    }
+
+    /**
+     * Renders persisted recent searches as a horizontally scrollable row of "chips".
+     * Tapping a chip sets the search text; existing debounce logic will execute the search + persist.
+     */
+    private fun renderRecentSearches() {
+        val items = ShopRepository.getRecentSearches()
+        val show = items.isNotEmpty()
+
+        recentSearchesRow.visibility = if (show) View.VISIBLE else View.GONE
+        recentSearchesScroll.visibility = if (show) View.VISIBLE else View.GONE
+
+        recentSearchesContainer.removeAllViews()
+        if (!show) return
+
+        items.forEachIndexed { index, query ->
+            val chip = TextView(requireContext()).apply {
+                text = query
+                background = requireContext().getDrawable(R.drawable.bg_chip_outline)
+                setTextColor(requireContext().getColor(R.color.ocean_text))
+                textSize = 14f
+
+                // Ensure 48dp touch target. bg_chip_outline has padding for visuals,
+                // but minHeight ensures accessibility target size.
+                minHeight = dpToPx(48)
+                setPadding(dpToPx(12))
+
+                contentDescription = getString(R.string.cd_recent_search_chip, query)
+
+                isClickable = true
+                isFocusable = true
+
+                setOnClickListener {
+                    applyRecentSearch(query)
+                }
+            }
+
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            if (index > 0) lp.marginStart = dpToPx(8)
+            chip.layoutParams = lp
+
+            recentSearchesContainer.addView(chip)
+        }
+    }
+
+    private fun applyRecentSearch(query: String) {
+        // Setting text triggers TextWatcher => debounce => refreshProducts + recordSearchQuery.
+        etSearch.setText(query)
+        etSearch.setSelection(query.length)
+        etSearch.requestFocus()
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 }

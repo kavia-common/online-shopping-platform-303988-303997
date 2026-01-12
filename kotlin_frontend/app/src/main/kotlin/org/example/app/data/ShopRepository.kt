@@ -1,8 +1,11 @@
 package org.example.app.data
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import java.util.Locale
 
 /**
  * Singleton repository providing:
@@ -10,6 +13,8 @@ import androidx.lifecycle.MutableLiveData
  * - Observable cart state (LiveData) shared across fragments
  * - Lightweight local persistence for cart + recent searches + catalog prefs
  * - Favorites (wishlist) stored locally (SharedPreferences) and exposed via LiveData
+ *
+ * Also provides simple in-memory paging for the Catalog screen (no network calls).
  */
 object ShopRepository {
 
@@ -54,6 +59,32 @@ object ShopRepository {
         val sortKey: String,
         val favoritesOnly: Boolean
     )
+
+    /**
+     * Query parameters that define a catalog "session". When this snapshot changes, paging resets.
+     */
+    data class CatalogQuery(
+        val selectedCategoryId: String?,
+        val searchQuery: String,
+        val sortKey: String,
+        val favoritesOnly: Boolean
+    )
+
+    /**
+     * A single page result for the catalog. This is intentionally simple for mock data.
+     */
+    data class PagedProducts(
+        val items: List<Product>,
+        val isEndReached: Boolean,
+        val totalCount: Int
+    )
+
+    // Paging state for catalog (kept in repository so Fragment can remain thin).
+    private var lastCatalogQuery: CatalogQuery? = null
+    private var lastCatalogFilteredSorted: List<Product> = emptyList()
+    private var currentCatalogPageIndex: Int = 0 // 0 means "no pages loaded yet"
+
+    private val pagingHandler = Handler(Looper.getMainLooper())
 
     // PUBLIC_INTERFACE
     fun getCategories(): List<Category> = categories
@@ -243,6 +274,153 @@ object ShopRepository {
         localStore?.writeCatalogSelectedCategoryId(prefs.selectedCategoryId)
         localStore?.writeCatalogSortKey(prefs.sortKey)
         localStore?.writeCatalogFavoritesOnly(prefs.favoritesOnly)
+    }
+
+    /**
+     * Returns a catalog page for the given [query], resetting internal paging state when the query changes.
+     *
+     * Notes:
+     * - This uses current in-memory mock products only (no network / no API calls).
+     * - Sorting is applied BEFORE paging so item order stays stable across pages.
+     * - The callback is invoked on the main thread.
+     */
+    // PUBLIC_INTERFACE
+    fun getCatalogFirstPage(
+        query: CatalogQuery,
+        pageSize: Int,
+        simulatedDelayMs: Long = 200L,
+        callback: (PagedProducts) -> Unit
+    ) {
+        // New query => reset paging.
+        val normalizedQuery = query.copy(searchQuery = query.searchQuery.trim())
+        lastCatalogQuery = normalizedQuery
+        currentCatalogPageIndex = 0
+
+        // Build a fully filtered+sorted list once; then slice pages from it.
+        lastCatalogFilteredSorted = buildCatalogFilteredSorted(normalizedQuery)
+
+        pagingHandler.postDelayed(
+            {
+                callback(producePage(pageIndex = 1, pageSize = pageSize))
+            },
+            simulatedDelayMs
+        )
+    }
+
+    /**
+     * Loads the next page for the most recent query.
+     *
+     * If [query] differs from the last query, this behaves like a reset and returns page 1.
+     * The callback is invoked on the main thread.
+     */
+    // PUBLIC_INTERFACE
+    fun getCatalogNextPage(
+        query: CatalogQuery,
+        pageSize: Int,
+        simulatedDelayMs: Long = 200L,
+        callback: (PagedProducts) -> Unit
+    ) {
+        val normalizedQuery = query.copy(searchQuery = query.searchQuery.trim())
+        val last = lastCatalogQuery
+
+        if (last == null || last != normalizedQuery) {
+            // Query changed; treat as first page.
+            getCatalogFirstPage(
+                query = normalizedQuery,
+                pageSize = pageSize,
+                simulatedDelayMs = simulatedDelayMs,
+                callback = callback
+            )
+            return
+        }
+
+        // If already at end, immediately return an empty page (caller can stop asking).
+        val currentEndIndex = currentCatalogPageIndex * pageSize
+        if (currentEndIndex >= lastCatalogFilteredSorted.size) {
+            pagingHandler.post {
+                callback(
+                    PagedProducts(
+                        items = emptyList(),
+                        isEndReached = true,
+                        totalCount = lastCatalogFilteredSorted.size
+                    )
+                )
+            }
+            return
+        }
+
+        pagingHandler.postDelayed(
+            {
+                callback(producePage(pageIndex = currentCatalogPageIndex + 1, pageSize = pageSize))
+            },
+            simulatedDelayMs
+        )
+    }
+
+    private fun producePage(pageIndex: Int, pageSize: Int): PagedProducts {
+        val safePageSize = pageSize.coerceAtLeast(1)
+        val startExclusive = 0
+        val total = lastCatalogFilteredSorted.size
+
+        val start = ((pageIndex - 1) * safePageSize).coerceAtLeast(startExclusive)
+        val end = (start + safePageSize).coerceAtMost(total)
+
+        val pageItems = if (start < end) lastCatalogFilteredSorted.subList(start, end) else emptyList()
+        currentCatalogPageIndex = pageIndex
+
+        val isEnd = end >= total
+        return PagedProducts(
+            items = pageItems.toList(),
+            isEndReached = isEnd,
+            totalCount = total
+        )
+    }
+
+    private fun buildCatalogFilteredSorted(query: CatalogQuery): List<Product> {
+        val favoritesSnapshot = getFavorites()
+        val q = query.searchQuery.trim()
+        val hasQuery = q.isNotBlank()
+        val qLower = q.lowercase(Locale.US)
+
+        val filtered = products.asSequence()
+            .filter { query.selectedCategoryId == null || it.categoryId == query.selectedCategoryId }
+            .filter { product ->
+                if (!query.favoritesOnly) return@filter true
+                favoritesSnapshot.contains(product.id)
+            }
+            .filter { product ->
+                if (!hasQuery) return@filter true
+                val nameLower = product.name.lowercase(Locale.US)
+                val categoryLower = getCategoryName(product.categoryId).lowercase(Locale.US)
+                nameLower.contains(qLower) || categoryLower.contains(qLower)
+            }
+            .toList()
+
+        // Sort key mirrors CatalogFragment's SortOption names.
+        return when (query.sortKey.trim().uppercase(Locale.US)) {
+            "PRICE_LOW_TO_HIGH" -> filtered.sortedBy { it.priceCents }
+            "PRICE_HIGH_TO_LOW" -> filtered.sortedByDescending { it.priceCents }
+            "NAME_A_TO_Z" -> filtered.sortedBy { it.name.lowercase(Locale.US) }
+            else -> {
+                // Relevance heuristic consistent with CatalogFragment.relevanceScore(...).
+                filtered.sortedWith(
+                    compareByDescending<Product> { relevanceScore(product = it, queryLower = qLower) }
+                        .thenBy { it.name.lowercase(Locale.US) }
+                )
+            }
+        }
+    }
+
+    private fun relevanceScore(product: Product, queryLower: String): Int {
+        if (queryLower.isBlank()) return 0
+        val nameLower = product.name.lowercase(Locale.US)
+        val categoryLower = getCategoryName(product.categoryId).lowercase(Locale.US)
+        return when {
+            nameLower.startsWith(queryLower) -> 3
+            nameLower.contains(queryLower) -> 2
+            categoryLower.contains(queryLower) -> 1
+            else -> 0
+        }
     }
 
     private fun publishCart() {

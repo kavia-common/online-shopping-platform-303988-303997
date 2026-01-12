@@ -50,4 +50,7 @@
     <string name="total">Total</string>
 
     <string name="footer_text">Ocean Shop • Demo e-commerce UI (mock data)</string>
+
+    <!-- Pagination -->
+    <string name="loading_more">Loading more</string>
 </resources>

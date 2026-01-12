@@ -18,7 +18,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import org.example.app.R
-import org.example.app.data.Product
 import org.example.app.data.ShopRepository
 import java.util.Locale
 
@@ -37,6 +36,8 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
     private lateinit var tvEmptyResults: TextView
     private lateinit var adapter: ProductAdapter
 
+    private lateinit var layoutManager: LinearLayoutManager
+
     private lateinit var etSearch: TextInputEditText
 
     // Recent searches UI
@@ -52,8 +53,32 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
     // Flag to avoid persisting while we're programmatically restoring state.
     private var isRestoringCatalogPrefs: Boolean = false
 
+    // Paging (infinite scroll)
+    private val pageSize = 20
+    private val prefetchThreshold = 6
+    private var isLoadingNextPage: Boolean = false
+    private var isEndReached: Boolean = false
+    private val loadedProducts: MutableList<org.example.app.data.Product> = mutableListOf()
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingSearchRunnable: Runnable? = null
+
+    private val endlessScrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            super.onScrolled(recyclerView, dx, dy)
+            if (dy <= 0) return
+
+            val totalCount = adapter.itemCount
+            if (totalCount <= 0) return
+
+            val lastVisible = layoutManager.findLastVisibleItemPosition()
+            val shouldPrefetch = lastVisible >= totalCount - 1 - prefetchThreshold
+
+            if (shouldPrefetch) {
+                requestNextPageIfNeeded()
+            }
+        }
+    }
 
     private enum class SortOption {
         RELEVANCE,
@@ -79,7 +104,8 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
         btnFavoritesOnly = view.findViewById(R.id.btn_favorites_only)
 
-        rvProducts.layoutManager = LinearLayoutManager(requireContext())
+        layoutManager = LinearLayoutManager(requireContext())
+        rvProducts.layoutManager = layoutManager
 
         adapter = ProductAdapter { product ->
             findNavController().navigate(
@@ -88,6 +114,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
             )
         }
         rvProducts.adapter = adapter
+        rvProducts.addOnScrollListener(endlessScrollListener)
 
         // Sorting dropdown (kept within existing sidebar panel)
         setupSortDropdown(view)
@@ -109,9 +136,13 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
 
         // Observe favorites so we can (a) update heart states and (b) re-run filtering when favoritesOnly is enabled.
         ShopRepository.observeFavorites().observe(viewLifecycleOwner) {
-            // Refresh list so hearts/tints match repo state.
-            // This does not change existing flows; it just updates UI state.
-            refreshProducts()
+            // When favorites-only is enabled, the backing dataset changes; reset paging.
+            if (favoritesOnly) {
+                resetAndLoadFirstPage()
+            } else {
+                // Otherwise just refresh UI (hearts/tints) without changing current paging.
+                adapter.submitWithFooter(loadedProducts.toList(), ShopRepository, showLoadingFooter = isLoadingNextPage)
+            }
         }
 
         // Restore last search (if any) to make search feel continuous across restarts.
@@ -123,7 +154,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
             etSearch.setText(lastQuery)
             etSearch.setSelection(lastQuery.length)
         } else {
-            refreshProducts()
+            resetAndLoadFirstPage()
         }
 
         // Ensure recent searches are shown immediately on entry (even before any new typing happens).
@@ -134,6 +165,10 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         // Avoid posting UI updates after Fragment view is destroyed.
         pendingSearchRunnable?.let { mainHandler.removeCallbacks(it) }
         pendingSearchRunnable = null
+
+        // Avoid leaking scroll listener across view recreations.
+        rvProducts.removeOnScrollListener(endlessScrollListener)
+
         super.onDestroyView()
     }
 
@@ -146,7 +181,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                 persistCatalogPreferences()
             }
             updateFavoritesOnlyButton()
-            refreshProducts()
+            resetAndLoadFirstPage()
         }
     }
 
@@ -187,7 +222,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                     pendingSearchRunnable = Runnable {
                         // Ensure we only refresh when the view is still attached.
                         if (view != null && isAdded) {
-                            refreshProducts()
+                            resetAndLoadFirstPage()
 
                             // Persist the query as a "recent search" after debounce (i.e., on "search execution").
                             ShopRepository.recordSearchQuery(searchQuery, maxItems = 5)
@@ -241,7 +276,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                     persistCatalogPreferences()
                 }
 
-                refreshProducts()
+                resetAndLoadFirstPage()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -271,7 +306,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
                 if (!isRestoringCatalogPrefs) {
                     persistCatalogPreferences()
                 }
-                refreshProducts()
+                resetAndLoadFirstPage()
             }
 
             container.addView(tv)
@@ -283,16 +318,81 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
         }
     }
 
-    private fun refreshProducts() {
-        val baseItems = ShopRepository.getAllProducts()
-        val filtered = applyFilters(baseItems)
-        val sorted = applySorting(filtered)
+    private fun currentQuerySnapshot(): ShopRepository.CatalogQuery {
+        return ShopRepository.CatalogQuery(
+            selectedCategoryId = selectedCategoryId,
+            searchQuery = searchQuery,
+            sortKey = selectedSortOption.name,
+            favoritesOnly = favoritesOnly
+        )
+    }
 
-        adapter.submit(sorted, ShopRepository)
+    private fun resetAndLoadFirstPage() {
+        // Reset all paging state.
+        isLoadingNextPage = true
+        isEndReached = false
+        loadedProducts.clear()
 
-        val showEmpty = sorted.isEmpty()
-        tvEmptyResults.visibility = if (showEmpty) View.VISIBLE else View.GONE
-        rvProducts.visibility = if (showEmpty) View.INVISIBLE else View.VISIBLE
+        // Show footer while fetching the first page to keep experience consistent.
+        adapter.submitWithFooter(emptyList(), ShopRepository, showLoadingFooter = true)
+
+        ShopRepository.getCatalogFirstPage(
+            query = currentQuerySnapshot(),
+            pageSize = pageSize
+        ) { page ->
+            if (!isAdded) return@getCatalogFirstPage
+
+            isLoadingNextPage = false
+            isEndReached = page.isEndReached
+
+            loadedProducts.clear()
+            loadedProducts.addAll(page.items)
+
+            adapter.submitWithFooter(loadedProducts.toList(), ShopRepository, showLoadingFooter = false)
+
+            val showEmpty = loadedProducts.isEmpty()
+            tvEmptyResults.visibility = if (showEmpty) View.VISIBLE else View.GONE
+            rvProducts.visibility = if (showEmpty) View.INVISIBLE else View.VISIBLE
+
+            // If the first page doesn't fill the viewport, attempt to prefetch next page.
+            if (!showEmpty) {
+                mainHandler.post { requestNextPageIfNeeded() }
+            }
+        }
+    }
+
+    private fun requestNextPageIfNeeded() {
+        if (isLoadingNextPage) return
+        if (isEndReached) return
+        if (!isAdded) return
+
+        isLoadingNextPage = true
+        adapter.setLoadingFooterVisible(true)
+
+        ShopRepository.getCatalogNextPage(
+            query = currentQuerySnapshot(),
+            pageSize = pageSize
+        ) { page ->
+            if (!isAdded) return@getCatalogNextPage
+
+            isLoadingNextPage = false
+            isEndReached = page.isEndReached
+
+            adapter.setLoadingFooterVisible(false)
+
+            if (page.items.isNotEmpty()) {
+                loadedProducts.addAll(page.items)
+                adapter.submitWithFooter(loadedProducts.toList(), ShopRepository, showLoadingFooter = false)
+            }
+
+            // If still not full and not end reached, keep loading until either condition is satisfied.
+            if (!isEndReached) {
+                val canScroll = rvProducts.canScrollVertically(1)
+                if (!canScroll) {
+                    mainHandler.post { requestNextPageIfNeeded() }
+                }
+            }
+        }
     }
 
     private fun sortOptionToSpinnerPosition(option: SortOption): Int {
@@ -341,69 +441,6 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
             updateFavoritesOnlyButton()
         } finally {
             isRestoringCatalogPrefs = false
-        }
-    }
-
-    private fun applyFilters(products: List<Product>): List<Product> {
-        val query = searchQuery.trim()
-        val hasQuery = query.isNotBlank()
-
-        val favoritesSnapshot = ShopRepository.getFavorites()
-
-        return products.asSequence()
-            .filter { selectedCategoryId == null || it.categoryId == selectedCategoryId }
-            .filter { product ->
-                if (!favoritesOnly) return@filter true
-                favoritesSnapshot.contains(product.id)
-            }
-            .filter { product ->
-                if (!hasQuery) return@filter true
-                matchesSearch(product, query)
-            }
-            .toList()
-    }
-
-    private fun applySorting(products: List<Product>): List<Product> {
-        return when (selectedSortOption) {
-            SortOption.RELEVANCE -> products.sortedWith(
-                compareByDescending<Product> { relevanceScore(it) }.thenBy { it.name.lowercase(Locale.US) }
-            )
-
-            SortOption.PRICE_LOW_TO_HIGH -> products.sortedBy { it.priceCents }
-            SortOption.PRICE_HIGH_TO_LOW -> products.sortedByDescending { it.priceCents }
-            SortOption.NAME_A_TO_Z -> products.sortedBy { it.name.lowercase(Locale.US) }
-        }
-    }
-
-    private fun matchesSearch(product: Product, query: String): Boolean {
-        val q = query.lowercase(Locale.US)
-        val productName = product.name.lowercase(Locale.US)
-        val categoryName = ShopRepository.getCategoryName(product.categoryId).lowercase(Locale.US)
-
-        // Match name OR category keywords (case-insensitive)
-        return productName.contains(q) || categoryName.contains(q)
-    }
-
-    /**
-     * A small "relevance" heuristic for in-memory sorting:
-     *  - Prefer startsWith match on product name
-     *  - Then contains match on product name
-     *  - Then contains match on category name
-     *  - If no query, keep original repo order by returning 0 (stable downstream tie-breakers)
-     */
-    private fun relevanceScore(product: Product): Int {
-        val q = searchQuery.trim()
-        if (q.isBlank()) return 0
-
-        val queryLower = q.lowercase(Locale.US)
-        val nameLower = product.name.lowercase(Locale.US)
-        val categoryLower = ShopRepository.getCategoryName(product.categoryId).lowercase(Locale.US)
-
-        return when {
-            nameLower.startsWith(queryLower) -> 3
-            nameLower.contains(queryLower) -> 2
-            categoryLower.contains(queryLower) -> 1
-            else -> 0
         }
     }
 
@@ -465,7 +502,7 @@ class CatalogFragment : Fragment(R.layout.fragment_catalog) {
     }
 
     private fun applyRecentSearch(query: String) {
-        // Setting text triggers TextWatcher => debounce => refreshProducts + recordSearchQuery.
+        // Setting text triggers TextWatcher => debounce => resetAndLoadFirstPage + recordSearchQuery.
         etSearch.setText(query)
         etSearch.setSelection(query.length)
         etSearch.requestFocus()

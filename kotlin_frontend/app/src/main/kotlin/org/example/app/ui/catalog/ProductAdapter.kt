@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -14,33 +15,97 @@ import org.example.app.data.ShopRepository
 
 class ProductAdapter(
     private val onClick: (Product) -> Unit
-) : RecyclerView.Adapter<ProductAdapter.VH>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var items: List<Product> = emptyList()
     private var repo: ShopRepository? = null
+
+    private var showLoadingFooter: Boolean = false
 
     init {
         setHasStableIds(true)
     }
 
+    /**
+     * Replace the whole list (used when query/filters/sort change and paging resets).
+     */
     fun submit(products: List<Product>, repository: ShopRepository) {
+        submitInternal(products = products, repository = repository, loadingFooter = showLoadingFooter)
+    }
+
+    /**
+     * Replace the whole list and optionally toggle the loading footer.
+     */
+    fun submitWithFooter(products: List<Product>, repository: ShopRepository, showLoadingFooter: Boolean) {
+        submitInternal(products = products, repository = repository, loadingFooter = showLoadingFooter)
+    }
+
+    /**
+     * Append items (used when fetching next page). This keeps DiffUtil animations smooth.
+     */
+    fun append(more: List<Product>, repository: ShopRepository) {
+        if (more.isEmpty()) {
+            repo = repository
+            return
+        }
+        val combined = items + more
+        submitInternal(products = combined, repository = repository, loadingFooter = showLoadingFooter)
+    }
+
+    /**
+     * Show/hide the lightweight loading row at the bottom.
+     */
+    fun setLoadingFooterVisible(visible: Boolean) {
+        if (showLoadingFooter == visible) return
+        showLoadingFooter = visible
+        // Footer-only change is simplest via notify; item list itself is unchanged.
+        if (visible) {
+            notifyItemInserted(itemCount)
+        } else {
+            // When hiding, footer was at last position.
+            notifyItemRemoved(itemCount)
+        }
+    }
+
+    private fun submitInternal(products: List<Product>, repository: ShopRepository, loadingFooter: Boolean) {
         val oldItems = items
-        val newItems = products
+        val oldFooter = showLoadingFooter
 
         repo = repository
-        items = newItems
+        items = products
+        showLoadingFooter = loadingFooter
 
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldItems.size
-            override fun getNewListSize(): Int = newItems.size
+            override fun getOldListSize(): Int = oldItems.size + if (oldFooter) 1 else 0
+            override fun getNewListSize(): Int = items.size + if (showLoadingFooter) 1 else 0
+
+            private fun oldViewType(position: Int): Int {
+                return if (oldFooter && position == oldItems.size) TYPE_LOADING else TYPE_PRODUCT
+            }
+
+            private fun newViewType(position: Int): Int {
+                return if (showLoadingFooter && position == items.size) TYPE_LOADING else TYPE_PRODUCT
+            }
 
             override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                return oldItems[oldItemPosition].id == newItems[newItemPosition].id
+                val oldType = oldViewType(oldItemPosition)
+                val newType = newViewType(newItemPosition)
+                if (oldType != newType) return false
+                if (oldType == TYPE_LOADING) return true
+
+                val o = oldItems[oldItemPosition]
+                val n = items[newItemPosition]
+                return o.id == n.id
             }
 
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                val oldType = oldViewType(oldItemPosition)
+                val newType = newViewType(newItemPosition)
+                if (oldType != newType) return false
+                if (oldType == TYPE_LOADING) return true
+
                 val o = oldItems[oldItemPosition]
-                val n = newItems[newItemPosition]
+                val n = items[newItemPosition]
                 // Product is a data class; equals covers full content.
                 return o == n
             }
@@ -50,22 +115,47 @@ class ProductAdapter(
     }
 
     override fun getItemId(position: Int): Long {
-        // Use a stable hash to help RecyclerView handle item moves during sorting.
-        return items[position].id.hashCode().toLong()
+        val viewType = getItemViewType(position)
+        return if (viewType == TYPE_LOADING) {
+            LOADING_STABLE_ID
+        } else {
+            // Use a stable hash to help RecyclerView handle item moves during sorting.
+            items[position].id.hashCode().toLong()
+        }
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val v = LayoutInflater.from(parent.context).inflate(R.layout.item_product, parent, false)
-        return VH(v, onClick)
+    override fun getItemViewType(position: Int): Int {
+        return if (showLoadingFooter && position == items.size) TYPE_LOADING else TYPE_PRODUCT
     }
 
-    override fun onBindViewHolder(holder: VH, position: Int) {
-        val product = items[position]
-        holder.bind(product, repo)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            TYPE_LOADING -> {
+                val v = inflater.inflate(R.layout.item_catalog_loading, parent, false)
+                LoadingVH(v)
+            }
+
+            else -> {
+                val v = inflater.inflate(R.layout.item_product, parent, false)
+                ProductVH(v, onClick)
+            }
+        }
     }
 
-    override fun onBindViewHolder(holder: VH, position: Int, payloads: MutableList<Any>) {
-        if (payloads.contains(PAYLOAD_FAVORITE_CHANGED)) {
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (holder) {
+            is ProductVH -> {
+                val product = items[position]
+                holder.bind(product, repo)
+            }
+
+            is LoadingVH -> holder.bind()
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (holder is ProductVH && payloads.contains(PAYLOAD_FAVORITE_CHANGED)) {
             val product = items[position]
             holder.bindFavorite(product, repo)
             return
@@ -73,7 +163,7 @@ class ProductAdapter(
         super.onBindViewHolder(holder, position, payloads)
     }
 
-    override fun getItemCount(): Int = items.size
+    override fun getItemCount(): Int = items.size + if (showLoadingFooter) 1 else 0
 
     // Called by CatalogFragment after a favorite toggle to refresh just that row.
     fun notifyFavoriteChanged(productId: String) {
@@ -83,7 +173,7 @@ class ProductAdapter(
         }
     }
 
-    class VH(
+    class ProductVH(
         itemView: View,
         private val onClick: (Product) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
@@ -134,7 +224,21 @@ class ProductAdapter(
         }
     }
 
+    class LoadingVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val progress: ProgressBar = itemView.findViewById(R.id.progress)
+
+        fun bind() {
+            // No-op; just keep visible.
+            progress.visibility = View.VISIBLE
+        }
+    }
+
     private companion object {
         private const val PAYLOAD_FAVORITE_CHANGED = "payload_favorite_changed"
+
+        private const val TYPE_PRODUCT = 1
+        private const val TYPE_LOADING = 2
+
+        private const val LOADING_STABLE_ID = Long.MIN_VALUE + 7L
     }
 }

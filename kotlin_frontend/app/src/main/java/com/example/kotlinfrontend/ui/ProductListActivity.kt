@@ -339,26 +339,51 @@ class ProductListActivity : ComponentActivity() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = productAdapter.withLoadStateFooter(footer)
 
-        // Toolbar: cart button + badge
+        // Toolbar: notifications + cart buttons with badges
         binding.toolbar.inflateMenu(R.menu.menu_product_list)
+
+        val notificationsItem = binding.toolbar.menu.findItem(R.id.action_notifications)
+        val notificationsBadgeController = NotificationsBadgeController(binding.toolbar, notificationsItem)
+        notificationsBadgeController.setOnClickListener {
+            startActivity(Intent(this, NotificationsActivity::class.java))
+        }
+
         val cartItem = binding.toolbar.menu.findItem(R.id.action_cart)
-        val badgeController = CartBadgeController(binding.toolbar, cartItem)
-        badgeController.setOnClickListener {
+        val cartBadgeController = CartBadgeController(binding.toolbar, cartItem)
+        cartBadgeController.setOnClickListener {
             startActivity(Intent(this, CartActivity::class.java))
         }
+
         binding.toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_cart) {
-                startActivity(Intent(this, CartActivity::class.java))
-                true
-            } else {
-                false
+            when (item.itemId) {
+                R.id.action_notifications -> {
+                    startActivity(Intent(this, NotificationsActivity::class.java))
+                    true
+                }
+                R.id.action_cart -> {
+                    startActivity(Intent(this, CartActivity::class.java))
+                    true
+                }
+                else -> false
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AppRepositories.unreadNotificationsCount(this@ProductListActivity).collectLatest { count ->
+                    notificationsBadgeController.setCount(count)
+                    // Announce badge changes for accessibility (only for meaningful non-zero changes).
+                    if (count > 0) {
+                        binding.root.announceForAccessibility("You have $count unread notifications.")
+                    }
+                }
             }
         }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 AppRepositories.cartItemCount(this@ProductListActivity).collectLatest { count ->
-                    badgeController.setCount(count)
+                    cartBadgeController.setCount(count)
                 }
             }
         }

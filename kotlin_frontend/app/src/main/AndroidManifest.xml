@@ -25,6 +25,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.NotificationsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ProductListActivity"
             android:exported="true">
             <intent-filter>

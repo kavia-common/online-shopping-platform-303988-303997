@@ -1,0 +1,10 @@
+<resources>
+    <string name="notifications_title">Notifications</string>
+    <string name="a11y_open_notifications">Open notifications</string>
+    <string name="a11y_unread_notifications_count">Unread notifications count</string>
+    <string name="a11y_mark_all_read">Mark all notifications as read</string>
+    <string name="a11y_notification_unread">Unread notification</string>
+    <string name="a11y_notification_read">Read notification</string>
+    <string name="notifications_empty_title">No notifications yet.</string>
+    <string name="notifications_empty_subtitle">We’ll show updates here (orders, cart reminders, promos).</string>
+</resources>

@@ -291,6 +291,29 @@ Order create requests now include optional payment metadata fields:
 
 If the backend does not support these fields, it should ignore them; the app keeps them nullable to avoid breaking compatibility.
 
+## In-app notifications (new)
+
+The app includes a simple in-app notifications system:
+- A **bell icon** in the Products toolbar shows an **unread badge**.
+- Tapping it opens a **Notifications** screen with:
+  - reverse chronological list
+  - read/unread styling (dot + bold title when unread)
+  - **pull-to-refresh**
+  - **Mark all read** action in the toolbar menu
+- Tapping a notification marks it read and (when applicable) navigates:
+  - Order updates → **Orders**
+  - Cart reminders → **Cart**
+
+### Persistence + backend fallback
+Notifications are persisted locally using **SharedPreferences + Moshi JSON** so they survive restarts.
+
+The repository attempts to call backend placeholder endpoints:
+- `GET /api/notifications`
+- `POST /api/notifications/read` `{ "id": "..." }`
+- `POST /api/notifications/readAll`
+
+If these endpoints are missing/unavailable (404/network), the app gracefully falls back to **local-only** notifications.
+
 ## Backend API configuration
 
 This frontend is wired to call the Spring Boot APIs at:

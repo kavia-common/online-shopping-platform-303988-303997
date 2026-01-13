@@ -54,4 +54,12 @@ object ApiClient {
         /** Create a CartApi instance using the provided baseUrl. */
         return createRetrofit(baseUrl).create(CartApi::class.java)
     }
+
+    // PUBLIC_INTERFACE
+    fun createNotificationApi(
+        baseUrl: String = ApiConfig.DEFAULT_BASE_URL
+    ): NotificationApi {
+        /** Create a NotificationApi instance using the provided baseUrl. */
+        return createRetrofit(baseUrl).create(NotificationApi::class.java)
+    }
 }

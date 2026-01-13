@@ -20,6 +20,7 @@ import com.example.kotlinfrontend.databinding.ActivityCheckoutBinding
 import com.example.kotlinfrontend.model.PaymentMethod
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -61,6 +62,7 @@ class CheckoutActivity : ComponentActivity() {
         setupFormListeners()
         setupCouponSuggestions()
         setupPaymentMethodUi()
+        setupPaymentValidationPolish()
         bindState()
 
         viewModel.prefillEmailIfAvailable()
@@ -142,6 +144,51 @@ class CheckoutActivity : ComponentActivity() {
             viewModel.updateCouponInput(item)
             viewModel.applyCouponFromCheckout()
         }
+    }
+
+    private fun setupPaymentValidationPolish() {
+        // Validation polish: apply a subtle animation when leaving a field (blur).
+        // Note: errors themselves are still driven by ViewModel's StateFlows.
+        fun TextInputLayout.installBlurValidation(
+            errorProvider: () -> String?,
+            fieldLabelForA11y: String
+        ) {
+            val edit = editText ?: return
+            edit.setOnFocusChangeListener { v, hasFocus ->
+                if (hasFocus) return@setOnFocusChangeListener
+
+                // When leaving focus, if error exists -> shake; else -> subtle success cue.
+                val err = errorProvider()
+                if (!err.isNullOrBlank()) {
+                    v.shakeForValidation()
+                    // Ensure TalkBack announces the error clearly.
+                    v.announceForAccessibilityPolite("$fieldLabelForA11y. Error: $err")
+                } else {
+                    this.pulseSuccess(this@CheckoutActivity)
+                }
+            }
+        }
+
+        binding.cardNumberInputLayout.installBlurValidation(
+            errorProvider = { viewModel.cardErrors.value.cardNumber },
+            fieldLabelForA11y = "Card number"
+        )
+        binding.cardExpiryInputLayout.installBlurValidation(
+            errorProvider = { viewModel.cardErrors.value.expiry },
+            fieldLabelForA11y = "Expiry"
+        )
+        binding.cardCvcInputLayout.installBlurValidation(
+            errorProvider = { viewModel.cardErrors.value.cvc },
+            fieldLabelForA11y = "CVC"
+        )
+        binding.cardNameInputLayout.installBlurValidation(
+            errorProvider = { viewModel.cardErrors.value.nameOnCard },
+            fieldLabelForA11y = "Name on card"
+        )
+        binding.cardZipInputLayout.installBlurValidation(
+            errorProvider = { viewModel.cardErrors.value.zip },
+            fieldLabelForA11y = "ZIP or postal code"
+        )
     }
 
     private fun bindState() {
@@ -364,18 +411,50 @@ class CheckoutActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.derivedCardBrand.collectLatest { brand ->
-                    // Generic icon is acceptable; update content description to reflect detected brand.
-                    binding.cardNumberInputLayout.setEndIconContentDescription("Card brand: ${brand.displayName}")
+                    // Dynamic brand icon (start icon on card number field).
+                    val iconRes = when (brand) {
+                        PaymentCardUtils.CardBrand.Visa -> R.drawable.ic_payment_visa
+                        PaymentCardUtils.CardBrand.Mastercard -> R.drawable.ic_payment_mastercard
+                        PaymentCardUtils.CardBrand.Amex -> R.drawable.ic_payment_amex
+                        PaymentCardUtils.CardBrand.Discover -> R.drawable.ic_payment_discover
+                        else -> R.drawable.ic_payment_card_generic
+                    }
+                    binding.cardNumberInputLayout.setStartIconDrawable(iconRes)
+                    binding.cardNumberInputLayout.setStartIconContentDescription("Card brand: ${brand.displayName}")
                 }
             }
         }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var lastA11yStatus: String? = null
+
                 viewModel.canPlaceOrder.collectLatest { canPlace ->
                     // placeOrderButton also gets disabled when loading; setLoading() handles that.
                     if (!binding.progressBar.isVisible) {
-                        binding.placeOrderButton.isEnabled = canPlace && !binding.emptyCartWarning.isVisible
+                        val enabled = canPlace && !binding.emptyCartWarning.isVisible
+                        binding.placeOrderButton.isEnabled = enabled
+
+                        // Accessibility (minSdk 24 friendly):
+                        // - Avoid View#setStateDescription (API 30+).
+                        // - Provide a dynamic contentDescription and announce when it changes.
+                        val status = if (enabled) {
+                            "Ready to place order"
+                        } else {
+                            when {
+                                binding.emptyCartWarning.isVisible -> "Disabled. Your cart is empty."
+                                viewModel.form.value.selectedPaymentMethodId == PaymentMethod.Card.ID && !viewModel.isPaymentSectionValid.value ->
+                                    "Disabled. Enter valid card details to continue."
+                                else -> "Disabled. Complete required fields to continue."
+                            }
+                        }
+
+                        binding.placeOrderButton.contentDescription = "Place order. $status"
+                        if (lastA11yStatus != status) {
+                            // Only announce changes to avoid noisy repeated announcements from flows.
+                            binding.placeOrderButton.announceForAccessibilityPolite(status)
+                            lastA11yStatus = status
+                        }
                     }
                 }
             }
@@ -396,6 +475,7 @@ class CheckoutActivity : ComponentActivity() {
                         is CheckoutViewModel.PaymentState.Declined -> {
                             binding.paymentInlineErrorText.isVisible = true
                             binding.paymentInlineErrorText.text = ps.message
+                            binding.paymentInlineErrorText.announceForAccessibilityPolite(ps.message)
                         }
                         is CheckoutViewModel.PaymentState.Succeeded -> {
                             // We don't show a success banner; the flow proceeds to order creation immediately.
@@ -425,6 +505,26 @@ class CheckoutActivity : ComponentActivity() {
                         }
 
                         is CheckoutViewModel.SubmitState.Error -> {
+                            // If card method is selected and card errors exist, guide the user to the first invalid field.
+                            if (viewModel.form.value.selectedPaymentMethodId == PaymentMethod.Card.ID) {
+                                val ce = viewModel.cardErrors.value
+                                val first = when {
+                                    !ce.cardNumber.isNullOrBlank() -> binding.cardNumberEditText to ce.cardNumber
+                                    !ce.expiry.isNullOrBlank() -> binding.cardExpiryEditText to ce.expiry
+                                    !ce.cvc.isNullOrBlank() -> binding.cardCvcEditText to ce.cvc
+                                    !ce.nameOnCard.isNullOrBlank() -> binding.cardNameEditText to ce.nameOnCard
+                                    !ce.zip.isNullOrBlank() -> binding.cardZipEditText to ce.zip
+                                    else -> null
+                                }
+
+                                if (first != null) {
+                                    val (view, msg) = first
+                                    view.requestFocus()
+                                    view.shakeForValidation()
+                                    view.announceForAccessibilityPolite("Please fix: ${msg ?: "invalid value"}")
+                                }
+                            }
+
                             // Keep snackbars for network/server/order submission errors.
                             Snackbar.make(binding.root, state.message, Snackbar.LENGTH_LONG)
                                 .setAction("Retry") { viewModel.placeOrder() }

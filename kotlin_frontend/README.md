@@ -198,6 +198,27 @@ When **Credit / Debit Card** is selected, the checkout shows card fields with **
 
 **Place order** is disabled until required shipping fields *and* payment inputs are valid.
 
+#### Payment UI polish: brand icons, animations, accessibility
+- **Card brand icons** update dynamically as you type (Visa / Mastercard / Amex / Discover; generic fallback).
+  - Detection lives in `ui/PaymentCardUtils.detectBrand(...)`.
+  - Icon mapping lives in `ui/CheckoutActivity` (`derivedCardBrand` collector).
+  - Icons are vector drawables in `app/src/main/res/drawable/`:
+    - `ic_payment_visa.xml`, `ic_payment_mastercard.xml`, `ic_payment_amex.xml`, `ic_payment_discover.xml`, `ic_payment_card_generic.xml`
+- **Error animations**:
+  - On field blur (leaving focus), invalid card fields do a **brief shake** and the error is announced to TalkBack.
+  - On submit, the first invalid card field is focused and shaken to guide the user.
+- **Success/valid cues**:
+  - On blur, fields that pass validation get a **gentle pulse** + subtle outline tint for reassurance (not distracting).
+- **Accessibility**:
+  - Brand icon has an updated `contentDescription` (e.g., "Card brand: Visa").
+  - Errors are set via `TextInputLayout.error` and announced using `announceForAccessibility` helpers.
+  - The **Place order** button sets a clear `stateDescription` when disabled (e.g., "Disabled. Enter valid card details to continue.").
+
+#### Extending card brand mappings
+1. Add the prefix detection in `ui/PaymentCardUtils.detectBrand`.
+2. Add/update the icon drawable in `app/src/main/res/drawable/`.
+3. Update the icon mapping in `ui/CheckoutActivity` where `derivedCardBrand` is collected.
+
 #### Data persistence / security notes
 - The app **does not** persist or send full card number (PAN) or CVC.
 - The app may persist only **non-sensitive metadata**:

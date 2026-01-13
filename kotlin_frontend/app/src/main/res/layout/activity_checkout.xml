@@ -538,7 +538,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:orientation="vertical">
+                        android:orientation="vertical"
+                        android:importantForAccessibility="yes">
 
                         <com.google.android.material.textfield.TextInputLayout
                             android:id="@+id/cardNumberInputLayout"
@@ -550,9 +551,10 @@
                             app:boxCornerRadiusBottomStart="14dp"
                             app:boxCornerRadiusTopEnd="14dp"
                             app:boxCornerRadiusTopStart="14dp"
-                            app:endIconMode="custom"
-                            app:endIconDrawable="@drawable/ic_category_generic"
-                            app:endIconContentDescription="Card brand">
+                            app:startIconDrawable="@drawable/ic_payment_card_generic"
+                            app:startIconContentDescription="Card brand"
+                            app:startIconTint="@color/ocean_text"
+                            app:endIconMode="none">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/cardNumberEditText"
@@ -560,6 +562,8 @@
                                 android:layout_height="wrap_content"
                                 android:contentDescription="Card number"
                                 android:inputType="number"
+                                android:importantForAutofill="yes"
+                                android:autofillHints="creditCardNumber"
                                 android:maxLines="1" />
                         </com.google.android.material.textfield.TextInputLayout>
 
@@ -587,6 +591,8 @@
                                     android:layout_height="wrap_content"
                                     android:contentDescription="Card expiry"
                                     android:inputType="number"
+                                    android:importantForAutofill="yes"
+                                    android:autofillHints="creditCardExpirationDate"
                                     android:maxLines="1" />
                             </com.google.android.material.textfield.TextInputLayout>
 
@@ -612,6 +618,8 @@
                                     android:layout_height="wrap_content"
                                     android:contentDescription="Card security code"
                                     android:inputType="numberPassword"
+                                    android:importantForAutofill="yes"
+                                    android:autofillHints="creditCardSecurityCode"
                                     android:maxLines="1" />
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
@@ -634,6 +642,8 @@
                                 android:layout_height="wrap_content"
                                 android:contentDescription="Name on card"
                                 android:inputType="textPersonName"
+                                android:importantForAutofill="yes"
+                                android:autofillHints="creditCardName"
                                 android:maxLines="1" />
                         </com.google.android.material.textfield.TextInputLayout>
 
@@ -655,6 +665,8 @@
                                 android:layout_height="wrap_content"
                                 android:contentDescription="ZIP or postal code (optional)"
                                 android:inputType="textPostalAddress"
+                                android:importantForAutofill="yes"
+                                android:autofillHints="postalCode"
                                 android:maxLines="1" />
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
@@ -668,7 +680,8 @@
                         android:textColor="@color/ocean_error"
                         android:textSize="12sp"
                         android:visibility="gone"
-                        android:contentDescription="Payment error" />
+                        android:contentDescription="Payment error"
+                        android:importantForAccessibility="yes" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/mockPaymentSwitch"
@@ -676,7 +689,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:checked="true"
-                        android:text="Mock payment approval (toggle to simulate decline)" />
+                        android:text="Mock payment approval (toggle to simulate decline)"
+                        android:contentDescription="Mock payment approval toggle" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

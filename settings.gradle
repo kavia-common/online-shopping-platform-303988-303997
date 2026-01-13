@@ -1,0 +1,8 @@
+/*
+ * Root-level Gradle settings to help CI environments that invoke Gradle from repository root.
+ * The actual Android project lives under `kotlin_frontend/`.
+ */
+rootProject.name = "online-shopping-platform"
+
+include(":kotlin_frontend")
+project(":kotlin_frontend").projectDir = file("kotlin_frontend")

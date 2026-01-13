@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Gradle wrapper shim for CI when invoked from kotlin_frontend/gradle directory.
+#
+# PUBLIC_INTERFACE
+# CI entrypoint: forwards all arguments to the wrapper at the kotlin_frontend root.
+
+set -eu
+
+TARGET="../gradlew"
+
+if [ ! -f "$TARGET" ]; then
+  echo "Error: expected gradle wrapper at $TARGET but it was not found." >&2
+  exit 127
+fi
+
+chmod +x "$TARGET" 2>/dev/null || true
+exec "$TARGET" "$@"

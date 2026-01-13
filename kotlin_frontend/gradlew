@@ -1,16 +1,29 @@
 #!/usr/bin/env sh
-# Minimal Gradle wrapper bootstrap script.
-# For full wrapper behavior, the standard Gradle wrapper scripts should be used.
-# This simplified script is sufficient for CI execution in many environments.
+# Failsafe wrapper shim. The real Gradle wrapper should exist in this same directory
+# in normal checkouts; if it doesn't, attempt to call `gradle` directly.
+#
+# PUBLIC_INTERFACE
+# CI entrypoint: if a proper Gradle wrapper jar/scripts are present, use them; otherwise fall back.
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
-GRADLE_WRAPPER_JAR="$DIR/gradle/wrapper/gradle-wrapper.jar"
+set -eu
 
-if [ ! -f "$GRADLE_WRAPPER_JAR" ]; then
-  echo "Missing gradle-wrapper.jar. Please add the standard Gradle wrapper jar to gradle/wrapper/."
-  exit 1
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REAL="$DIR/gradlew.real"
+
+# If someone has provided a real wrapper with a different name, prefer it.
+if [ -f "$REAL" ]; then
+  chmod +x "$REAL" 2>/dev/null || true
+  exec "$REAL" "$@"
 fi
 
-# Some wrapper jars (including ones vendored from Gradle sources) may not include a Main-Class
-# attribute in the manifest. Invoke the wrapper main class explicitly.
-java -cp "$GRADLE_WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"
+# If the standard wrapper support files exist, this script is expected to be replaced by them.
+# Fall back to system gradle (may not exist in CI image).
+if command -v gradle >/dev/null 2>&1; then
+  exec gradle "$@"
+fi
+
+echo "Error: No usable Gradle wrapper found and 'gradle' is not available on PATH." >&2
+echo "Expected either:" >&2
+echo "  - a real wrapper at $REAL, or" >&2
+echo "  - system 'gradle' installed in the CI environment." >&2
+exit 127

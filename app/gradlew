@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Gradle wrapper shim for repo/app workdir (if CI runs from this module).
+# Delegates to kotlin_frontend/gradlew when present.
+
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/../kotlin_frontend/gradlew" ]; then
+  exec sh "$SCRIPT_DIR/../kotlin_frontend/gradlew" "$@"
+fi
+if [ -f "$SCRIPT_DIR/../gradlew" ]; then
+  exec sh "$SCRIPT_DIR/../gradlew" "$@"
+fi
+
+echo "ERROR: Could not find kotlin_frontend/gradlew or ../gradlew from repo/app shim." >&2
+exit 127

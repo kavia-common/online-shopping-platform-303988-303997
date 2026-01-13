@@ -1,0 +1,19 @@
+CI FAILURE NOTE: ./gradlew not found (exit 127)
+
+The repository DOES include Gradle wrapper scripts:
+- online-shopping-platform-303988-303997/gradlew (root shim; forwards to kotlin_frontend/gradlew)
+- online-shopping-platform-303988-303997/kotlin_frontend/gradlew (actual wrapper)
+
+If CI reports:
+  bash: line 1: ./gradlew: No such file or directory
+
+…then the CI container’s working directory does not contain this repository checkout, or the repo is not mounted at the expected path.
+
+Recommended CI fix:
+1) Ensure the build step runs with WORKDIR set to the repo root:
+   /home/kavia/workspace/code-generation/online-shopping-platform-303988-303997
+
+2) Or invoke the stable script by absolute path:
+   /home/kavia/workspace/code-generation/online-shopping-platform-303988-303997/run-gradle-check.sh
+
+Repository-side shims were added at multiple common CI paths, but if the repo is not mounted into the container filesystem at all, no repository change can fix it.

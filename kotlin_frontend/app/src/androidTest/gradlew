@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# Delegate Gradle wrapper for CI environments that execute ./gradlew from app/src/androidTest.
+
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+APP_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd -P)"
+KF_DIR="$(CDPATH= cd -- "$APP_DIR/.." && pwd -P)"
+
+if [ -f "$KF_DIR/gradlew" ] && [ -x "$KF_DIR/gradlew" ]; then
+  exec "$KF_DIR/gradlew" "$@"
+fi
+
+if [ -f "$KF_DIR/../gradlew" ] && [ -x "$KF_DIR/../gradlew" ]; then
+  exec "$KF_DIR/../gradlew" "$@"
+fi
+
+echo "ERROR: Could not locate an executable Gradle wrapper from: $SCRIPT_DIR" >&2
+exit 127

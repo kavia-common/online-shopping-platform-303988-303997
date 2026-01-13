@@ -1,15 +1,15 @@
 #!/usr/bin/env sh
+# CI helper: run Gradle wrapper for kotlin_frontend reliably from any working directory
+# inside the repo. Prefer calling this script from CI:
+#   sh kotlin_frontend/ci-gradle.sh check
+
 set -eu
 
-# CI-safe Gradle wrapper invocation.
-# Some CI environments/checkers mount the workspace without preserving executable bits,
-# causing `./gradlew: Permission denied`. Invoking via `sh` avoids needing +x.
-#
-# Usage examples:
-#   sh ci-gradle.sh tasks
-#   sh ci-gradle.sh :app:assembleDebug
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR"
+if [ -f "$SCRIPT_DIR/gradlew" ]; then
+  exec sh "$SCRIPT_DIR/gradlew" "$@"
+fi
 
-sh ./gradlew "$@"
+echo "ERROR: kotlin_frontend/gradlew not found. Ensure repository is mounted correctly." >&2
+exit 127

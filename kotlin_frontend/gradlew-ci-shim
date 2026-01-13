@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Minimal CI shim: some Docker runners may rename/strip execute bits from gradlew.
+# This file provides an alternate stable entrypoint that can be invoked as ./gradlew-ci-shim.
+
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+TARGET="$SCRIPT_DIR/gradlew"
+
+if [ ! -f "$TARGET" ]; then
+  echo "ERROR: Expected gradlew at: $TARGET"
+  exit 127
+fi
+
+# Try to execute; if not executable, run via sh.
+if [ -x "$TARGET" ]; then
+  exec "$TARGET" "$@"
+fi
+
+exec sh "$TARGET" "$@"

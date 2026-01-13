@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# CI helper wrapper: attempts to locate and invoke the real Gradle wrapper.
+# Use when CI complains `./gradlew` is missing due to workdir/mount mismatch.
+set -eu
+
+here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# Prefer the local wrapper if present and executable.
+if [ -x "$here/gradlew" ]; then
+  exec "$here/gradlew" "$@"
+fi
+
+# Try common relative locations from different mounts.
+candidates="
+$here/online-shopping-platform-303988-303997/kotlin_frontend/gradlew
+$here/../online-shopping-platform-303988-303997/kotlin_frontend/gradlew
+$here/../../online-shopping-platform-303988-303997/kotlin_frontend/gradlew
+$here/../kotlin_frontend/gradlew
+$here/../../kotlin_frontend/gradlew
+"
+
+for c in $candidates; do
+  if [ -x "$c" ]; then
+    exec "$c" "$@"
+  fi
+done
+
+echo "ERROR: Could not locate an executable gradlew wrapper from: $here" >&2
+echo "Tried:" >&2
+for c in $candidates; do echo "  - $c" >&2; done
+exit 127

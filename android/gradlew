@@ -1,0 +1,20 @@
+#!/bin/sh
+# Android directory Gradle wrapper shim.
+# Some CI harnesses `cd android/` (or mount only android/) and run `./gradlew`.
+
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ROOT_GRADLEW="$SCRIPT_DIR/../gradlew"
+
+if [ ! -f "$ROOT_GRADLEW" ]; then
+  # Fallback: try kotlin_frontend directly if root isn't present in this mount.
+  DIRECT="$SCRIPT_DIR/../kotlin_frontend/gradlew"
+  if [ -f "$DIRECT" ]; then
+    exec sh "$DIRECT" "$@"
+  fi
+  echo "Error: gradlew not found at repo root or kotlin_frontend from: $SCRIPT_DIR" >&2
+  exit 127
+fi
+
+exec sh "$ROOT_GRADLEW" "$@"

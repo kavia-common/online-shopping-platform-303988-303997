@@ -1,0 +1,18 @@
+/*
+ * Root-level Gradle build file.
+ * This exists to support CI environments that invoke Gradle from the repository root.
+ *
+ * The Android app project remains in `kotlin_frontend/` and continues to own Android-specific configuration.
+ */
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+tasks.register("check") {
+    group = "verification"
+    description = "Delegates to kotlin_frontend:check when invoked from repository root."
+    dependsOn(":kotlin_frontend:check")
+}

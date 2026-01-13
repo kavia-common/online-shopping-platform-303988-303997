@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+#
+# Gradle wrapper directory shim.
+# If a script mistakenly runs from `gradle/wrapper` and invokes `./gradlew`,
+# walk up to find the project wrapper.
+#
+set -eu
+
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+i=0
+while [ $i -lt 10 ]; do
+  if [ -f "$DIR/gradlew" ] && [ "$DIR/gradlew" != "$0" ]; then
+    exec sh "$DIR/gradlew" "$@"
+  fi
+  DIR="$(dirname "$DIR")"
+  i=$((i + 1))
+done
+
+if command -v gradle >/dev/null 2>&1; then
+  exec gradle "$@"
+fi
+
+echo "ERROR: Could not locate a parent gradlew within 10 levels." 1>&2
+exit 127

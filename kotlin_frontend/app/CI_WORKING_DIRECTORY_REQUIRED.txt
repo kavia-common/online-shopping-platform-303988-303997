@@ -1,0 +1,17 @@
+CI error observed:
+
+  bash: line 1: ./gradlew: No such file or directory
+
+This happens when CI executes `./gradlew` from a directory that does not contain the wrapper script.
+
+Fix options:
+1) Ensure CI sets working directory to a folder with `gradlew`, e.g.:
+   - online-shopping-platform-303988-303997/kotlin_frontend
+   - online-shopping-platform-303988-303997
+   - workspace root (and run `sh ci-run-gradle.sh check`)
+
+2) If your CI insists on running from this module directory, invoke:
+   - ../gradlew check
+(or ensure `./gradlew` exists here and is executable)
+
+If CI runs outside the mounted checkout/workspace path, no in-repo change can fix it.

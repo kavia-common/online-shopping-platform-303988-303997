@@ -1,0 +1,22 @@
+Gradle wrapper shim locations in this repository/workspace:
+
+Workspace root:
+- ./gradlew
+
+Repo root:
+- ./online-shopping-platform-303988-303997/gradlew
+
+Android project root:
+- ./online-shopping-platform-303988-303997/kotlin_frontend/gradlew
+
+Android module directory:
+- ./online-shopping-platform-303988-303997/kotlin_frontend/app/gradlew
+
+Deep fallback:
+- ./online-shopping-platform-303988-303997/kotlin_frontend/app/src/main/gradlew
+
+If CI reports:
+  bash: line 1: ./gradlew: No such file or directory
+then CI is executing from a directory that does not contain any of the above files
+and is likely outside the mounted workspace/repo tree. Fix CI by setting the
+working directory to one of the above paths before invoking ./gradlew.

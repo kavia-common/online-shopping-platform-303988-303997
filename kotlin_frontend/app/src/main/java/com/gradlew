@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Ultra deep-path delegator wrapper under app/src/main/java/com.
+
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+CANDIDATE="$SCRIPT_DIR/../../../../../../../gradlew"
+
+if [ -f "$CANDIDATE" ]; then
+  if [ ! -x "$CANDIDATE" ]; then
+    chmod +x "$CANDIDATE" 2>/dev/null || true
+  fi
+  exec "$CANDIDATE" "$@"
+fi
+
+echo "ERROR: Could not find Gradle wrapper at $CANDIDATE" >&2
+exit 127

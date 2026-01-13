@@ -1,0 +1,14 @@
+This repository contains the Android project under:
+
+  kotlin_frontend/
+
+The Gradle Wrapper is located at:
+
+  kotlin_frontend/gradlew
+
+If a CI job runs `./gradlew` and fails with "No such file or directory", ensure the working directory is set to either:
+- the repo root (which includes a forwarding ./gradlew shim), or
+- kotlin_frontend/ (preferred)
+
+Alternatively, invoke:
+  ./run-gradle-check.sh

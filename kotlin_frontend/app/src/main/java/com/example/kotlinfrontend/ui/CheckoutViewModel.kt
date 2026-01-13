@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kotlinfrontend.data.AppRepositories
 import com.example.kotlinfrontend.data.CouponUxFeedback
 import com.example.kotlinfrontend.data.CouponValidationState
+import com.example.kotlinfrontend.data.DemoNotificationsEngine
 import com.example.kotlinfrontend.data.OrderRepository
 import com.example.kotlinfrontend.data.PaymentPrefs
 import com.example.kotlinfrontend.model.CartItem
@@ -528,6 +529,10 @@ class CheckoutViewModel(
                 val orderId = created.id
                 val total = cartRepo.discountedTotals().total.takeIf { it > 0.0 } ?: (created.totalAmount ?: 0.0)
                 _submitState.value = SubmitState.Success(orderId = orderId, total = total)
+
+                // Demo notifications: schedule local lifecycle events after successful placement.
+                // (Frontend-only; will no-op if demo is disabled.)
+                DemoNotificationsEngine(getApplication()).scheduleOrderLifecycleAfterPlacement(orderId = orderId)
             } catch (t: Throwable) {
                 _submitState.value = mapError(t)
             } finally {

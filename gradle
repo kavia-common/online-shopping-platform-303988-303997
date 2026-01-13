@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Delegator for CI scripts that invoke `./gradle` in this workspace folder.
+
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+CANDIDATE="$SCRIPT_DIR/gradlew"
+
+if [ -f "$CANDIDATE" ]; then
+  if [ ! -x "$CANDIDATE" ]; then
+    chmod +x "$CANDIDATE" 2>/dev/null || true
+  fi
+  exec "$CANDIDATE" "$@"
+fi
+
+echo "ERROR: ./gradlew not found next to ./gradle delegator" >&2
+exit 127

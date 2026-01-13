@@ -1,33 +1,5 @@
 <resources>
     <string name="notifications_title">Notifications</string>
-    <string name="a11y_open_notifications">Open notifications</string>
-    <string name="a11y_unread_notifications_count">Unread notifications count</string>
-    <string name="a11y_mark_all_read">Mark all notifications as read</string>
-    <string name="a11y_notification_unread">Unread notification</string>
-    <string name="a11y_notification_read">Read notification</string>
-    <string name="notifications_empty_title">No notifications yet.</string>
-    <string name="notifications_empty_subtitle">We’ll show updates here (orders, cart reminders, promos).</string>
-
-    <!-- Time-grouped section headers -->
-    <string name="notifications_section_today">Today</string>
-    <string name="notifications_section_this_week">This Week</string>
-    <string name="notifications_section_earlier">Earlier</string>
-
-    <!-- Swipe actions / announcements -->
-    <string name="a11y_notification_marked_read">Marked as read</string>
-    <string name="a11y_notification_dismissed">Dismissed</string>
-    <string name="a11y_swipe_right_mark_read">Swipe right to mark as read</string>
-    <string name="a11y_swipe_left_dismiss">Swipe left to dismiss</string>
-
-    <!-- Snackbar / undo -->
-    <string name="notifications_dismissed_snackbar">Notification dismissed</string>
-    <string name="action_undo">UNDO</string>
-
-    <!-- Icon content descriptions by type -->
-    <string name="a11y_notification_type_order_placed">Order placed</string>
-    <string name="a11y_notification_type_order_paid">Order paid</string>
-    <string name="a11y_notification_type_shipped">Order shipped</string>
-    <string name="a11y_notification_type_delivered">Order delivered</string>
-    <string name="a11y_notification_type_cart_reminder">Cart reminder</string>
-    <string name="a11y_notification_type_general">General notification</string>
+    <string name="notifications_empty">You have no notifications yet.</string>
+    <string name="notifications_demo_toggle">Demo mode (simulate)</string>
 </resources>

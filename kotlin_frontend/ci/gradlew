@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# CI shim: forward wrapper calls to the real wrapper at project root.
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/../gradlew" "$@"

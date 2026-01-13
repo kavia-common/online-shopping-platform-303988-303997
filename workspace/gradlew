@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# CI shim: forward wrapper calls to the android project wrapper.
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/../kotlin_frontend/gradlew" "$@"

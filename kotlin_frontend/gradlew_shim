@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Compatibility shim: delegates to kotlin_frontend/gradlew.
+# This file exists to provide an alternate entrypoint if a CI runner's
+# command is hardcoded to a different filename.
+
+set -eu
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "$SCRIPT_DIR/gradlew" "$@"

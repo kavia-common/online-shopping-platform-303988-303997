@@ -1,0 +1,18 @@
+#!/bin/sh
+# CI compatibility wrapper inside repo-root workspace/_temp/ folder.
+
+set -e
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# up to repo root: _temp -> workspace -> repo
+REPO_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+
+REAL_GRADLEW="$REPO_DIR/gradlew"
+
+if [ ! -f "$REAL_GRADLEW" ]; then
+  echo "Error: Expected gradlew at: $REAL_GRADLEW" >&2
+  exit 127
+fi
+
+chmod +x "$REAL_GRADLEW" 2>/dev/null || true
+exec sh "$REAL_GRADLEW" "$@"

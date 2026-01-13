@@ -1,0 +1,18 @@
+#!/bin/sh
+# CI compatibility wrapper located inside kotlin_frontend/.gradle.
+# Some analysis tools incorrectly set working directory to .gradle and invoke ./gradlew.
+
+set -e
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+REAL_GRADLEW="$PROJECT_DIR/gradlew"
+
+if [ ! -f "$REAL_GRADLEW" ]; then
+  echo "Error: Expected gradlew at: $REAL_GRADLEW" >&2
+  exit 127
+fi
+
+chmod +x "$REAL_GRADLEW" 2>/dev/null || true
+exec sh "$REAL_GRADLEW" "$@"

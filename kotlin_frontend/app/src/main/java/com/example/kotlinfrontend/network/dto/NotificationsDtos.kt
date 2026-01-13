@@ -30,12 +30,25 @@ object NotificationsDtos {
  */
 fun NotificationsDtos.NotificationDto.toDomain(): NotificationItem {
     val safeId = id ?: "local-${System.currentTimeMillis()}"
+
+    // Backend currently sends coarse types (ORDER/CART/PROMO). We map them to the new granular app types.
+    // If backend later starts sending the granular strings, this will also work.
     val safeType = when (type?.uppercase()) {
-        "ORDER" -> NotificationType.ORDER
-        "CART" -> NotificationType.CART
-        "PROMO" -> NotificationType.PROMO
-        else -> NotificationType.PROMO
+        "ORDER_PLACED" -> NotificationType.ORDER_PLACED
+        "ORDER_PAID" -> NotificationType.ORDER_PAID
+        "SHIPPED" -> NotificationType.SHIPPED
+        "DELIVERED" -> NotificationType.DELIVERED
+        "CART_REMINDER" -> NotificationType.CART_REMINDER
+        "GENERAL" -> NotificationType.GENERAL
+
+        // Legacy/coarse values:
+        "ORDER" -> NotificationType.GENERAL
+        "CART" -> NotificationType.CART_REMINDER
+        "PROMO" -> NotificationType.GENERAL
+
+        else -> NotificationType.GENERAL
     }
+
     val safeDeeplink = when (deeplink?.uppercase()) {
         "ORDERS" -> NotificationDeeplink.ORDERS
         "CART" -> NotificationDeeplink.CART

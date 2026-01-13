@@ -13,10 +13,18 @@ data class NotificationItem(
     val deeplink: NotificationDeeplink
 )
 
+/**
+ * Notification type used for icon mapping and accessibility.
+ *
+ * Note: We keep this app-local and map legacy types (ORDER/CART/PROMO) to more granular types where needed.
+ */
 enum class NotificationType {
-    ORDER,
-    CART,
-    PROMO
+    ORDER_PLACED,
+    ORDER_PAID,
+    SHIPPED,
+    DELIVERED,
+    CART_REMINDER,
+    GENERAL,
 }
 
 enum class NotificationDeeplink {

@@ -13,7 +13,7 @@
         android:id="@+id/icon"
         android:layout_width="28dp"
         android:layout_height="28dp"
-        android:contentDescription=""
+        android:contentDescription="@string/a11y_notification_type_general"
         android:src="@drawable/ic_category_generic"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintLeft_toLeftOf="parent" />

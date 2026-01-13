@@ -296,8 +296,12 @@ If the backend does not support these fields, it should ignore them; the app kee
 The app includes a simple in-app notifications system:
 - A **bell icon** in the Products toolbar shows an **unread badge**.
 - Tapping it opens a **Notifications** screen with:
-  - reverse chronological list
+  - **time-grouped sections**: **Today**, **This Week**, **Earlier** (with sticky headers)
   - read/unread styling (dot + bold title when unread)
+  - **per-type icons** (mapped from `NotificationType` to existing vector drawables)
+  - **swipe actions**:
+    - **swipe right**: mark as read
+    - **swipe left**: dismiss (remove) with **UNDO** Snackbar
   - **pull-to-refresh**
   - **Mark all read** action in the toolbar menu
 - Tapping a notification marks it read and (when applicable) navigates:

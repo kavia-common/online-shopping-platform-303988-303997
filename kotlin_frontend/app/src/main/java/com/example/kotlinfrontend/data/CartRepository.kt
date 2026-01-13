@@ -13,8 +13,9 @@ import com.example.kotlinfrontend.network.dto.CartDto
 import com.example.kotlinfrontend.network.dto.CartItemMutationRequestDto
 import com.example.kotlinfrontend.network.dto.CartUpdateQuantityRequestDto
 import com.example.kotlinfrontend.network.dto.CartLineItemDto
-import com.example.kotlinfrontend.network.dto.CouponApplyRequestDto
 import com.example.kotlinfrontend.network.dto.CouponRemoveRequestDto
+import com.example.kotlinfrontend.network.dto.CouponRequestDto
+import com.example.kotlinfrontend.network.dto.CouponResultDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -388,29 +389,48 @@ class CartRepository(context: Context) {
 
                 // Attempt applyCoupon endpoint; if missing, we still accept locally (pending server).
                 try {
-                    val cart = cartApi.applyCoupon(
-                        email = email,
-                        body = CouponApplyRequestDto(code = code, items = buildCouponLineItemsLockedUnsafe())
+                    // First: apply rules via normalized endpoint so we can show rule metadata/messages.
+                    val result = cartApi.applyCouponRules(
+                        body = CouponRequestDto(code = code, email = email, items = buildCouponLineItemsLockedUnsafe())
                     )
-                    // Reconcile items/totals from server cart if provided.
-                    reconcileFromCartDto(cart)
+
+                    if (!result.valid) {
+                        val friendly = CouponErrorMessageMapper.map(result.messages.firstOrNull() ?: "Coupon can't be applied.")
+                        mutex.withLock {
+                            setCouponLocked(coupon = null, state = CouponValidationState.Invalid(friendly))
+                            _lastCouponUxFeedback.value = CouponUxFeedback(
+                                type = CouponUxFeedback.Type.INVALID_RULE,
+                                message = friendly
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Then: apply to cart (so server cart totals/items can be reconciled if backend supports it).
+                    // This keeps backward compatibility with existing cart endpoints.
+                    try {
+                        val cart = cartApi.applyCoupon(
+                            email = email,
+                            body = CouponRequestDto(code = code, email = email, items = buildCouponLineItemsLockedUnsafe())
+                        )
+                        reconcileFromCartDto(cart)
+                    } catch (_: Throwable) {
+                        // If cart apply endpoint fails (e.g., older backend), we still keep coupon as valid locally.
+                    }
 
                     mutex.withLock {
-                        // Even if backend cart DTO doesn't contain coupon, we keep local coupon and mark valid.
                         _couponValidationState.value = CouponValidationState.Valid
                         _lastCouponUxFeedback.value = CouponUxFeedback(
                             type = CouponUxFeedback.Type.APPLIED,
-                            message = "Coupon applied."
+                            message = buildAppliedMessage(result)
                         )
-                        // Save to recents once we know it's valid (rule-valid, not just pending).
                         val updatedSaved = savedCouponsStore.add(code)
                         _savedCoupons.value = updatedSaved
                         _couponSuggestions.value = mergeSuggestions(saved = updatedSaved, server = null)
-
                         recomputeTotalsLocked()
                     }
                 } catch (tApply: Throwable) {
-                    // Endpoint might not exist yet; treat as soft-failure and keep local coupon.
+                    // Soft failure: keep local coupon and allow UI to continue, but mark pending.
                     mutex.withLock { _couponValidationState.value = CouponValidationState.PendingServerValidation }
                 }
             } catch (t: Throwable) {
@@ -421,7 +441,6 @@ class CartRepository(context: Context) {
                     couponStore.save(previousCoupon)
                     recomputeTotalsLocked()
                 }
-                // Keep snackbars for transient issues.
                 emitError("Couldn't apply coupon. Please try again.", CartErrorEvent.Operation.APPLY_COUPON, t)
             }
         }
@@ -432,7 +451,8 @@ class CartRepository(context: Context) {
         /**
          * Remove coupon from cart (optimistic).
          *
-         * If backend supports removing coupon, attempt it best-effort; on failure we rollback.
+         * Preferred backend route for Android: POST /api/carts/coupon/remove with body { email }.
+         * We also keep a fallback to the older DELETE /api/carts/coupon?email=... route.
          */
         val email = _activeEmail.value
         repoScope.launch {
@@ -446,20 +466,20 @@ class CartRepository(context: Context) {
             if (email.isNullOrBlank()) return@launch
 
             try {
-                // Prefer body variant (supports new line items) but gracefully fallback.
+                // Preferred: normalized remove endpoint
                 try {
-                    val cart = cartApi.removeCouponWithBody(
-                        email = email,
-                        body = CouponRemoveRequestDto(
-                            code = previousCoupon?.code,
-                            items = buildCouponLineItemsLockedUnsafe()
-                        )
-                    )
-                    reconcileFromCartDto(cart)
+                    cartApi.removeCouponRules(body = CouponRemoveRequestDto(email = email))
                 } catch (_: Throwable) {
-                    // Optional endpoint might not exist or not accept body; fallback.
-                    val cart = cartApi.removeCoupon(email = email)
-                    reconcileFromCartDto(cart)
+                    // Fallback: old cart endpoint
+                    cartApi.removeCoupon(email = email)
+                }
+
+                // We don't strictly need to reconcile cart items; coupon removal only affects totals.
+                // If backend returns updated cart elsewhere, future refresh will reconcile.
+                mutex.withLock {
+                    _couponValidationState.value = CouponValidationState.None
+                    _lastCouponUxFeedback.value = CouponUxFeedback(CouponUxFeedback.Type.NONE, "")
+                    recomputeTotalsLocked()
                 }
             } catch (t: Throwable) {
                 mutex.withLock {
@@ -602,15 +622,18 @@ class CartRepository(context: Context) {
     }
 
     private suspend fun validateCouponWithBackendBestEffort(email: String, code: String): Boolean {
-        // Attempt backend validation. If endpoint missing, keep pending state (graceful fallback).
+        /**
+         * Attempt backend validation using compatibility endpoint.
+         *
+         * If endpoint is missing or network fails, keep PendingServerValidation (graceful fallback).
+         */
         return try {
-            val resp = cartApi.validateCoupon(
-                email = email,
-                body = CouponApplyRequestDto(code = code, items = buildCouponLineItemsLockedUnsafe())
+            val result = cartApi.validateCoupon(
+                body = CouponRequestDto(code = code, email = email, items = buildCouponLineItemsLockedUnsafe())
             )
-            if (!resp.valid) {
-                val raw = resp.message ?: "Coupon can't be applied."
-                val friendly = CouponErrorMessageMapper.map(raw)
+
+            if (!result.valid) {
+                val friendly = CouponErrorMessageMapper.map(result.messages.firstOrNull() ?: "Coupon can't be applied.")
                 mutex.withLock {
                     setCouponLocked(coupon = null, state = CouponValidationState.Invalid(friendly))
                     _lastCouponUxFeedback.value = CouponUxFeedback(
@@ -618,31 +641,23 @@ class CartRepository(context: Context) {
                         message = friendly
                     )
                 }
-                // Rule violations are not network errors; keep them inline (no snackbar).
                 false
             } else {
-                val mappedCoupon = resp.coupon?.toDomainCouponFallback(code)
+                // We may not have full coupon metadata in response; keep local coupon but mark valid.
                 mutex.withLock {
-                    if (mappedCoupon != null) {
-                        setCouponLocked(coupon = mappedCoupon, state = CouponValidationState.Valid)
-                    } else {
-                        // No coupon payload provided; keep local coupon but mark valid.
-                        _couponValidationState.value = CouponValidationState.Valid
-                        recomputeTotalsLocked()
-                    }
+                    _couponValidationState.value = CouponValidationState.Valid
+                    recomputeTotalsLocked()
                     _lastCouponUxFeedback.value = CouponUxFeedback(
                         type = CouponUxFeedback.Type.APPLIED,
-                        message = "Coupon applied."
+                        message = buildAppliedMessage(result)
                     )
-                    // Save recents on confirmed validity.
                     val updatedSaved = savedCouponsStore.add(code)
                     _savedCoupons.value = updatedSaved
                     _couponSuggestions.value = mergeSuggestions(saved = updatedSaved, server = null)
                 }
                 true
             }
-        } catch (t: Throwable) {
-            // Endpoint not present or network issue: keep pending.
+        } catch (_: Throwable) {
             mutex.withLock {
                 if (_coupon.value != null) {
                     _couponValidationState.value = CouponValidationState.PendingServerValidation
@@ -730,6 +745,12 @@ class CartRepository(context: Context) {
             tax = tax,
             total = total
         )
+    }
+
+    private fun buildAppliedMessage(result: CouponResultDto): String {
+        // Prefer backend messages if provided; otherwise fall back to a generic success message.
+        val msg = result.messages.firstOrNull()?.trim().orEmpty()
+        return if (msg.isNotBlank()) msg else "Coupon applied."
     }
 
     private fun mergeSuggestions(saved: List<String>, server: List<String>?): List<String> {

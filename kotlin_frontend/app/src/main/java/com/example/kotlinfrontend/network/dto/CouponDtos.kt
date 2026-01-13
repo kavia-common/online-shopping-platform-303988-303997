@@ -4,12 +4,18 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /**
- * Coupon DTOs.
+ * Coupon DTOs aligned with backend compatibility routes:
+ * - POST /api/carts/coupon/validate
+ * - POST /api/carts/coupon/apply
+ * - POST /api/carts/coupon/remove
  *
- * Note: The backend now supports sending cart line items for coupon validation/apply/remove
- * so it can enforce min subtotal, category eligibility, and usage limits.
+ * Assumption note:
+ * - Backend may use BigDecimal for money amounts; the Android client uses Double for simplicity.
+ *   This is acceptable for display and typical totals, but you should prefer backend-calculated totals
+ *   whenever available to avoid rounding drift.
  *
- * We keep all new fields optional to remain compatible with older backends that ignore them.
+ * Security note:
+ * - Only non-sensitive fields are sent (email + cart line item + coupon code). No payment/card data here.
  */
 
 @JsonClass(generateAdapter = true)
@@ -24,30 +30,62 @@ data class CartLineItemDto(
     val qty: Int
 )
 
+/**
+ * Shared request shape for coupon validation/apply compatibility endpoints.
+ *
+ * Backend expects:
+ * - validate/apply: { code, email, items? }
+ */
 @JsonClass(generateAdapter = true)
-data class CouponApplyRequestDto(
+data class CouponRequestDto(
     @Json(name = "code")
     val code: String,
-    /**
-     * Optional line items so backend can compute eligible subtotal by category
-     * and enforce coupon rules.
-     */
+    @Json(name = "email")
+    val email: String?,
     @Json(name = "items")
     val items: List<CartLineItemDto>? = null
 )
 
+/**
+ * Remove coupon request for compatibility endpoint:
+ * - remove: { email }
+ */
 @JsonClass(generateAdapter = true)
 data class CouponRemoveRequestDto(
-    /**
-     * Optional (some backends support removal by just email/cart identity and ignore the body).
-     * Keeping it nullable to support DELETE with/without body depending on backend routing.
-     */
-    @Json(name = "code")
-    val code: String? = null,
-    @Json(name = "items")
-    val items: List<CartLineItemDto>? = null
+    @Json(name = "email")
+    val email: String?
 )
 
+/**
+ * Normalized response shape used by the Android app UI regardless of whether the
+ * response came from validate or apply.
+ *
+ * Fields chosen per task requirements:
+ * - valid
+ * - discountAmount
+ * - messages
+ * - rule metadata (minSubtotal, allowedCategories, remainingUses)
+ */
+@JsonClass(generateAdapter = true)
+data class CouponResultDto(
+    @Json(name = "valid")
+    val valid: Boolean,
+    @Json(name = "discountAmount")
+    val discountAmount: Double? = null,
+    @Json(name = "messages")
+    val messages: List<String> = emptyList(),
+    @Json(name = "minSubtotal")
+    val minSubtotal: Double? = null,
+    @Json(name = "allowedCategories")
+    val allowedCategories: List<String>? = null,
+    @Json(name = "remainingUses")
+    val remainingUses: Int? = null
+)
+
+/**
+ * Legacy/optional coupon metadata returned by some endpoints.
+ * Kept for backward compatibility if backend returns coupon info on validate.
+ */
 @JsonClass(generateAdapter = true)
 data class CouponDto(
     @Json(name = "code")
@@ -70,6 +108,13 @@ data class CouponDto(
     val expiresAtEpochMillis: Long? = null
 )
 
+/**
+ * Old validate response used previously by this project.
+ * Kept so we can map from it into CouponResultDto in the repository.
+ *
+ * Some backends return:
+ * { valid, message, coupon }
+ */
 @JsonClass(generateAdapter = true)
 data class CouponValidationResponseDto(
     @Json(name = "valid")

@@ -98,21 +98,61 @@ In **Cart** and **Checkout**:
 - **Transient failures** (network/server operational issues) still appear as **Snackbars** with **Retry**.
 - The typed coupon code is preserved in the field when validation fails.
 
-#### Backend validation behavior
-When an identity email is available, the app will **attempt** to validate/apply the coupon with backend endpoints if they exist.
+#### Backend validation behavior (aligned with product-api compatibility routes)
+When an identity email is available, the app validates/applies/removes coupons using the **compatibility endpoints** under:
 
-**Important:** Coupon requests now include the **current cart line items** so the backend can enforce:
+- `/api/carts/coupon/validate`
+- `/api/carts/coupon/apply`
+- `/api/carts/coupon/remove`
+
+These endpoints accept the Android payload shape and delegate to the backend `CouponService`.
+
+**Important:** Coupon requests include the **current cart line items** so the backend can enforce:
 - minimum subtotal rules
 - category-specific eligibility
 - usage limits
 
-Endpoints:
-- `POST /api/coupons/validate?email=...`  
-  body: `{ "code": "...", "items": [{ "productId": "...", "category": "...", "unitPrice": 12.34, "qty": 2 }] }`
-- `POST /api/carts/coupon?email=...`  
-  body: `{ "code": "...", "items": [...] }`
-- `DELETE /api/carts/coupon?email=...`  
-  typically without a body; if supported, the app may send `{ "code": "...", "items": [...] }`
+**Validate**
+- `POST /api/carts/coupon/validate`
+- body:
+  ```json
+  {
+    "code": "SAVE10",
+    "email": "guest@example.com",
+    "items": [
+      { "productId": "p1", "category": "Electronics", "unitPrice": 12.34, "qty": 2 }
+    ]
+  }
+  ```
+- response (normalized):
+  ```json
+  {
+    "valid": true,
+    "discountAmount": 5.0,
+    "messages": ["Coupon applied."],
+    "minSubtotal": 20.0,
+    "allowedCategories": ["Electronics"],
+    "remainingUses": 3
+  }
+  ```
+
+**Apply**
+- `POST /api/carts/coupon/apply`
+- body: same as validate
+- response: same normalized shape as validate
+
+**Remove**
+- `POST /api/carts/coupon/remove`
+- body:
+  ```json
+  { "email": "guest@example.com" }
+  ```
+- response: normalized shape (typically `valid: true` with messages)
+
+**Cart application/removal fallback**
+To keep backward compatibility with existing cart flows, the app may still call:
+- `POST /api/carts/coupon?email=...` (to reconcile cart server-side when available)
+- `DELETE /api/carts/coupon?email=...` (fallback removal)
 
 If these endpoints are not present yet (404) or network fails, the app falls back gracefully:
 - Coupon can remain applied as **Pending server validation** (UI continues to show totals)

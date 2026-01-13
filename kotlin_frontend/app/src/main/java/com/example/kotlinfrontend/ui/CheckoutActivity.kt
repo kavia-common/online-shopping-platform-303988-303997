@@ -31,8 +31,9 @@ import java.util.Locale
  *
  * Payment:
  * - User selects a payment method (Card, Wallet, COD).
+ * - Card method shows card inputs with live formatting + validation (Luhn, expiry, CVC length by brand).
  * - App performs a simulated payment step (loading/success/decline with retry).
- * - On success, order creation proceeds; payment metadata is attached to the order create request.
+ * - On success, order creation proceeds; only non-sensitive payment metadata is attached (brand, last4).
  *
  * Coupon support:
  * - Apply/remove coupon before placing order; totals update reactively.
@@ -90,6 +91,13 @@ class CheckoutActivity : ComponentActivity() {
         binding.postalCodeEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updatePostalCode(it) })
         binding.countryEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateCountry(it) })
         binding.noteEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateNote(it) })
+
+        // Card inputs (live formatting + validation).
+        binding.cardNumberEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateCardNumber(it) })
+        binding.cardExpiryEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateExpiry(it) })
+        binding.cardCvcEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateCvc(it) })
+        binding.cardNameEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateNameOnCard(it) })
+        binding.cardZipEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateZip(it) })
 
         binding.checkoutCouponCodeEditText.addTextChangedListener(SimpleTextWatcher { viewModel.updateCouponInput(it) })
         binding.checkoutApplyCouponButton.setOnClickListener { viewModel.applyCouponFromCheckout() }
@@ -173,6 +181,28 @@ class CheckoutActivity : ComponentActivity() {
                         binding.noteEditText.setSelection(form.note.length)
                     }
 
+                    // Card fields (avoid cursor jumps by only setting when different).
+                    if (binding.cardNumberEditText.text?.toString() != form.cardNumber) {
+                        binding.cardNumberEditText.setText(form.cardNumber)
+                        binding.cardNumberEditText.setSelection(form.cardNumber.length)
+                    }
+                    if (binding.cardExpiryEditText.text?.toString() != form.expiry) {
+                        binding.cardExpiryEditText.setText(form.expiry)
+                        binding.cardExpiryEditText.setSelection(form.expiry.length)
+                    }
+                    if (binding.cardCvcEditText.text?.toString() != form.cvc) {
+                        binding.cardCvcEditText.setText(form.cvc)
+                        binding.cardCvcEditText.setSelection(form.cvc.length)
+                    }
+                    if (binding.cardNameEditText.text?.toString() != form.nameOnCard) {
+                        binding.cardNameEditText.setText(form.nameOnCard)
+                        binding.cardNameEditText.setSelection(form.nameOnCard.length)
+                    }
+                    if (binding.cardZipEditText.text?.toString() != form.zip) {
+                        binding.cardZipEditText.setText(form.zip)
+                        binding.cardZipEditText.setSelection(form.zip.length)
+                    }
+
                     if (binding.checkoutCouponCodeEditText.text?.toString() != form.couponInput) {
                         binding.checkoutCouponCodeEditText.setText(form.couponInput)
                         binding.checkoutCouponCodeEditText.setSelection(form.couponInput.length)
@@ -188,6 +218,9 @@ class CheckoutActivity : ComponentActivity() {
                         PaymentMethod.OnlineWallet.ID -> if (!binding.paymentMethodWalletRadio.isChecked) binding.paymentMethodWalletRadio.isChecked = true
                         PaymentMethod.CashOnDelivery.ID -> if (!binding.paymentMethodCodRadio.isChecked) binding.paymentMethodCodRadio.isChecked = true
                     }
+
+                    // Show/hide card fields based on selection.
+                    binding.cardFieldsContainer.isVisible = form.selectedPaymentMethodId == PaymentMethod.Card.ID
                 }
             }
         }
@@ -303,6 +336,53 @@ class CheckoutActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.cardErrors.collectLatest { errors ->
+                    binding.cardNumberInputLayout.error = errors.cardNumber
+                    binding.cardExpiryInputLayout.error = errors.expiry
+                    binding.cardCvcInputLayout.error = errors.cvc
+                    binding.cardNameInputLayout.error = errors.nameOnCard
+
+                    // Optional field: prefer helper text instead of error unless truly invalid.
+                    binding.cardZipInputLayout.error = errors.zip
+                    binding.cardZipInputLayout.helperText = if (errors.zip == null) "Optional" else null
+
+                    // Accessibility: if a field has an error, set it as contentDescription as well.
+                    binding.cardNumberInputLayout.contentDescription =
+                        if (errors.cardNumber != null) "Card number error: ${errors.cardNumber}" else "Card number"
+                    binding.cardExpiryInputLayout.contentDescription =
+                        if (errors.expiry != null) "Expiry error: ${errors.expiry}" else "Expiry"
+                    binding.cardCvcInputLayout.contentDescription =
+                        if (errors.cvc != null) "CVC error: ${errors.cvc}" else "CVC"
+                    binding.cardNameInputLayout.contentDescription =
+                        if (errors.nameOnCard != null) "Name on card error: ${errors.nameOnCard}" else "Name on card"
+                    binding.cardZipInputLayout.contentDescription =
+                        if (errors.zip != null) "ZIP error: ${errors.zip}" else "ZIP or postal code (optional)"
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.derivedCardBrand.collectLatest { brand ->
+                    // Generic icon is acceptable; update content description to reflect detected brand.
+                    binding.cardNumberInputLayout.setEndIconContentDescription("Card brand: ${brand.displayName}")
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.canPlaceOrder.collectLatest { canPlace ->
+                    // placeOrderButton also gets disabled when loading; setLoading() handles that.
+                    if (!binding.progressBar.isVisible) {
+                        binding.placeOrderButton.isEnabled = canPlace && !binding.emptyCartWarning.isVisible
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.paymentState.collectLatest { ps ->
                     when (ps) {
                         CheckoutViewModel.PaymentState.Idle -> {
@@ -360,11 +440,12 @@ class CheckoutActivity : ComponentActivity() {
     }
 
     private fun setLoading(loading: Boolean) {
-        binding.placeOrderButton.isEnabled = !loading && !(binding.emptyCartWarning.isVisible)
+        // While loading, always disable. When not loading, enablement is controlled by ViewModel's canPlaceOrder.
+        binding.placeOrderButton.isEnabled = !loading && !binding.emptyCartWarning.isVisible && viewModel.canPlaceOrder.value
         binding.progressBar.isVisible = loading
         binding.formContainer.alpha = if (loading) 0.6f else 1.0f
         setAllEnabled(binding.formContainer, enabled = !loading)
-        binding.placeOrderButton.isEnabled = !loading && !binding.emptyCartWarning.isVisible
+        binding.placeOrderButton.isEnabled = !loading && !binding.emptyCartWarning.isVisible && viewModel.canPlaceOrder.value
     }
 
     private fun setAllEnabled(root: View, enabled: Boolean) {

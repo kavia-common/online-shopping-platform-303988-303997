@@ -28,6 +28,12 @@ import java.util.UUID
  *
  * Holds all form state (rotation-safe via SavedStateHandle) and performs a simulated payment step
  * before creating the order.
+ *
+ * Payment card inputs:
+ * - card number is validated by Luhn and formatted for readability (spaces)
+ * - expiry is parsed as MM/YY and validated to be current/future
+ * - CVC length varies by brand (Amex=4, others=3)
+ * - only non-sensitive metadata may be attached to order payload (brand id, last4 derived in-memory)
  */
 class CheckoutViewModel(
     application: Application,
@@ -48,7 +54,15 @@ class CheckoutViewModel(
         val note: String = "",
         val mockPaymentSuccess: Boolean = true,
         val couponInput: String = "",
-        val selectedPaymentMethodId: String = PaymentMethod.Card.ID
+        val selectedPaymentMethodId: String = PaymentMethod.Card.ID,
+
+        // Card inputs (Card method only). These are kept in-memory + SavedStateHandle for rotation.
+        // Security: do NOT persist across app restarts; do NOT log these values.
+        val cardNumber: String = "",
+        val expiry: String = "",
+        val cvc: String = "",
+        val nameOnCard: String = "",
+        val zip: String = ""
     )
 
     data class FieldErrors(
@@ -59,6 +73,19 @@ class CheckoutViewModel(
         val state: String? = null,
         val postalCode: String? = null,
         val country: String? = null
+    )
+
+    data class CardFieldErrors(
+        val cardNumber: String? = null,
+        val expiry: String? = null,
+        val cvc: String? = null,
+        val nameOnCard: String? = null,
+        val zip: String? = null
+    )
+
+    data class PaymentMetadata(
+        val cardBrandId: String? = null,
+        val cardLast4: String? = null
     )
 
     sealed class PaymentState {
@@ -93,6 +120,21 @@ class CheckoutViewModel(
 
     private val _fieldErrors = MutableStateFlow(FieldErrors())
     val fieldErrors: StateFlow<FieldErrors> = _fieldErrors.asStateFlow()
+
+    private val _cardErrors = MutableStateFlow(CardFieldErrors())
+    val cardErrors: StateFlow<CardFieldErrors> = _cardErrors.asStateFlow()
+
+    private val _derivedCardBrand = MutableStateFlow(PaymentCardUtils.CardBrand.Unknown)
+    val derivedCardBrand: StateFlow<PaymentCardUtils.CardBrand> = _derivedCardBrand.asStateFlow()
+
+    private val _paymentMetadata = MutableStateFlow(PaymentMetadata())
+    val paymentMetadata: StateFlow<PaymentMetadata> = _paymentMetadata.asStateFlow()
+
+    private val _isPaymentSectionValid = MutableStateFlow(false)
+    val isPaymentSectionValid: StateFlow<Boolean> = _isPaymentSectionValid.asStateFlow()
+
+    private val _canPlaceOrder = MutableStateFlow(false)
+    val canPlaceOrder: StateFlow<Boolean> = _canPlaceOrder.asStateFlow()
 
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
@@ -196,12 +238,142 @@ class CheckoutViewModel(
         if (_paymentState.value is PaymentState.Declined) {
             _paymentState.value = PaymentState.Idle
         }
+
+        // When leaving Card method, clear card errors; when entering, validate.
+        if (methodId != PaymentMethod.Card.ID) {
+            _cardErrors.value = CardFieldErrors()
+        }
+        validatePaymentSection(live = true)
+        recomputeCanPlaceOrder()
+    }
+
+    private fun recomputeCanPlaceOrder() {
+        // Enablement is computed from: cart not empty + shipping fields valid + payment section valid + not submitting.
+        val cartOk = cartRepo.items.value.isNotEmpty()
+        val shippingOk = validate(_form.value) == FieldErrors()
+
+        val paymentOk = when (_form.value.selectedPaymentMethodId) {
+            PaymentMethod.Card.ID -> _isPaymentSectionValid.value
+            else -> true // Wallet/COD have no additional required inputs currently
+        }
+
+        val notLoading = _submitState.value !is SubmitState.Loading
+        _canPlaceOrder.value = cartOk && shippingOk && paymentOk && notLoading
+    }
+
+    private fun validatePaymentSection(live: Boolean) {
+        val form = _form.value
+        if (form.selectedPaymentMethodId != PaymentMethod.Card.ID) {
+            _isPaymentSectionValid.value = true
+            _cardErrors.value = CardFieldErrors()
+            return
+        }
+
+        val numberDigits = PaymentCardUtils.digitsOnly(form.cardNumber)
+        val brand = PaymentCardUtils.detectBrand(numberDigits)
+        _derivedCardBrand.value = brand
+
+        val numberError = when {
+            numberDigits.isBlank() -> if (live) "Required" else "Required"
+            numberDigits.length < 12 -> if (live) "Enter a valid card number" else "Enter a valid card number"
+            !PaymentCardUtils.luhnValid(numberDigits) -> "Card number is invalid"
+            else -> null
+        }
+
+        val expiryParsed = PaymentCardUtils.parseExpiry(form.expiry)
+        val expiryError = when {
+            PaymentCardUtils.digitsOnly(form.expiry).isBlank() -> "Required"
+            expiryParsed == null -> "Use MM/YY"
+            !PaymentCardUtils.isExpiryValidAndNotPast(expiryParsed) -> "Card is expired"
+            else -> null
+        }
+
+        val cvcDigits = PaymentCardUtils.digitsOnly(form.cvc)
+        val requiredCvcLen = PaymentCardUtils.maxCvcLengthForBrand(brand)
+        val cvcError = when {
+            cvcDigits.isBlank() -> "Required"
+            cvcDigits.length < requiredCvcLen -> "CVC must be $requiredCvcLen digits"
+            else -> null
+        }
+
+        val nameError = if (form.nameOnCard.trim().isBlank()) "Required" else null
+
+        val zipError = if (!PaymentCardUtils.isZipPlausible(form.zip)) "Enter a valid ZIP" else null
+
+        val errors = CardFieldErrors(
+            cardNumber = numberError,
+            expiry = expiryError,
+            cvc = cvcError,
+            nameOnCard = nameError,
+            zip = zipError
+        )
+
+        _cardErrors.value = errors
+        _isPaymentSectionValid.value = errors == CardFieldErrors()
     }
 
     // PUBLIC_INTERFACE
     fun updateCouponInput(value: String) {
         /** Update the editable coupon input field (does not apply). */
         setForm(_form.value.copy(couponInput = value))
+    }
+
+    // PUBLIC_INTERFACE
+    fun updateCardNumber(rawUserInput: String) {
+        /**
+         * Updates card number with live formatting. Also updates derived brand + last4 metadata
+         * (in-memory only).
+         */
+        val formatted = PaymentCardUtils.formatCardNumber(rawUserInput)
+        val digits = PaymentCardUtils.digitsOnly(formatted)
+        val brand = PaymentCardUtils.detectBrand(digits)
+
+        setForm(_form.value.copy(cardNumber = formatted))
+
+        _derivedCardBrand.value = brand
+        _paymentMetadata.value = _paymentMetadata.value.copy(
+            cardBrandId = brand.id.takeIf { it != PaymentCardUtils.CardBrand.Unknown.id },
+            cardLast4 = PaymentCardUtils.last4(digits)
+        )
+
+        validatePaymentSection(live = true)
+
+        // Persist last valid brand (non-sensitive) once the card looks valid.
+        if (PaymentCardUtils.luhnValid(digits)) {
+            PaymentPrefs.setLastValidCardBrandId(getApplication(), brand.id)
+        }
+    }
+
+    // PUBLIC_INTERFACE
+    fun updateExpiry(rawUserInput: String) {
+        /** Updates expiry with live formatting (MM/YY). */
+        val formatted = PaymentCardUtils.formatExpiry(rawUserInput)
+        setForm(_form.value.copy(expiry = formatted))
+        validatePaymentSection(live = true)
+    }
+
+    // PUBLIC_INTERFACE
+    fun updateCvc(rawUserInput: String) {
+        /** Updates CVC with digits-only. Length validation depends on derived brand. */
+        val maxLen = PaymentCardUtils.maxCvcLengthForBrand(_derivedCardBrand.value)
+        val digits = PaymentCardUtils.digitsOnly(rawUserInput).take(maxLen)
+        setForm(_form.value.copy(cvc = digits))
+        validatePaymentSection(live = true)
+    }
+
+    // PUBLIC_INTERFACE
+    fun updateNameOnCard(value: String) {
+        /** Updates name on card (required for Card method). */
+        setForm(_form.value.copy(nameOnCard = value))
+        validatePaymentSection(live = true)
+    }
+
+    // PUBLIC_INTERFACE
+    fun updateZip(value: String) {
+        /** Updates optional ZIP/postal code for card. */
+        val normalized = PaymentCardUtils.normalizeZip(value)
+        setForm(_form.value.copy(zip = normalized))
+        validatePaymentSection(live = true)
     }
 
     // PUBLIC_INTERFACE
@@ -256,22 +428,41 @@ class CheckoutViewModel(
          *
          * Network errors are reported via snackbars (SubmitState.Error), while payment declines are
          * reported inline via PaymentState.Declined.
+         *
+         * Card method: blocks submission unless card inputs are valid.
+         * Security: only brand + last4 (derived in-memory) are attached as non-sensitive metadata.
          */
         val items = cartRepo.items.value
         if (items.isEmpty()) {
             _submitState.value = SubmitState.Error(message = "Your cart is empty.")
+            recomputeCanPlaceOrder()
             return
         }
 
         val form = _form.value
         val errors = validate(form)
 
-        if (errors != FieldErrors()) {
+        // Payment validation for Card
+        validatePaymentSection(live = false)
+        val paymentOk = when (form.selectedPaymentMethodId) {
+            PaymentMethod.Card.ID -> _isPaymentSectionValid.value
+            else -> true
+        }
+
+        if (errors != FieldErrors() || !paymentOk) {
             _fieldErrors.value = errors
+
+            val message = if (!paymentOk && form.selectedPaymentMethodId == PaymentMethod.Card.ID) {
+                "Please fix the card details."
+            } else {
+                "Please fix the highlighted fields."
+            }
+
             _submitState.value = SubmitState.Error(
-                message = "Please fix the highlighted fields.",
+                message = message,
                 fieldErrors = errors
             )
+            recomputeCanPlaceOrder()
             return
         }
 
@@ -279,6 +470,7 @@ class CheckoutViewModel(
         _fieldErrors.value = FieldErrors()
         _submitState.value = SubmitState.Loading
         _paymentState.value = PaymentState.Processing
+        recomputeCanPlaceOrder()
 
         viewModelScope.launch {
             // Step 1) Payment processing (simulated for now)
@@ -288,6 +480,7 @@ class CheckoutViewModel(
                 is PaymentState.Declined -> {
                     _paymentState.value = paymentResult
                     _submitState.value = SubmitState.Idle
+                    recomputeCanPlaceOrder()
                     return@launch
                 }
                 is PaymentState.Succeeded -> {
@@ -297,6 +490,7 @@ class CheckoutViewModel(
                     // Defensive: treat unknown state as failure.
                     _paymentState.value = PaymentState.Declined("Payment could not be processed. Please try again.")
                     _submitState.value = SubmitState.Idle
+                    recomputeCanPlaceOrder()
                     return@launch
                 }
             }
@@ -308,7 +502,17 @@ class CheckoutViewModel(
 
                 val pm = PaymentMethod.fromId(form.selectedPaymentMethodId)
                 val paymentMethodId = pm?.id
-                val paymentRef = (paymentState.value as? PaymentState.Succeeded)?.paymentReference
+
+                // Attach non-sensitive metadata to paymentReference for demo only.
+                // The backend dto supports only paymentReference string currently.
+                // Example: "mock-abcdef123456|brand=visa|last4=4242"
+                val basePaymentRef = (paymentState.value as? PaymentState.Succeeded)?.paymentReference
+                val meta = paymentMetadata.value
+                val metaSuffix = buildString {
+                    if (!meta.cardBrandId.isNullOrBlank()) append("|brand=").append(meta.cardBrandId)
+                    if (!meta.cardLast4.isNullOrBlank()) append("|last4=").append(meta.cardLast4)
+                }
+                val paymentRef = (basePaymentRef ?: "").takeIf { it.isNotBlank() }?.plus(metaSuffix) ?: basePaymentRef
 
                 val created = orderRepo.createOrder(
                     email = form.email,
@@ -327,6 +531,7 @@ class CheckoutViewModel(
             } catch (t: Throwable) {
                 _submitState.value = mapError(t)
             } finally {
+                recomputeCanPlaceOrder()
                 // Keep payment state as-is so the UI can show the last outcome.
                 // (Success navigates away immediately anyway.)
             }
@@ -344,10 +549,17 @@ class CheckoutViewModel(
     private fun setForm(newForm: FormState) {
         _form.value = newForm
         savedStateHandle[KEY_FORM] = newForm
+
         // As user types, clear field errors for friendlier UX.
         if (_fieldErrors.value != FieldErrors()) {
             _fieldErrors.value = FieldErrors()
         }
+        // Likewise clear card errors while typing; validatePaymentSection() will repopulate as needed.
+        if (_cardErrors.value != CardFieldErrors()) {
+            _cardErrors.value = CardFieldErrors()
+        }
+
+        recomputeCanPlaceOrder()
     }
 
     private fun validate(form: FormState): FieldErrors {

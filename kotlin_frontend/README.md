@@ -182,11 +182,29 @@ From the Cart screen:
 
 ### Payment methods (new)
 The checkout now includes a **payment method selection**:
-- **Credit / Debit Card** (placeholder)
+- **Credit / Debit Card**
 - **Online Wallet** (generic)
 - **Cash on Delivery**
 
 The app stores the **last used payment method** locally (SharedPreferences) and will **preselect it** on your next checkout.
+
+### Card input validation (polished)
+When **Credit / Debit Card** is selected, the checkout shows card fields with **live formatting + validation**:
+- **Card number**: spaced formatting while typing + **Luhn check**
+- **Expiry**: parses **MM/YY** and validates it is **current/future**
+- **CVC**: validates length based on detected brand (**Amex=4**, others=3)
+- **Name on card**: required
+- **ZIP / Postal**: optional (light plausibility check)
+
+**Place order** is disabled until required shipping fields *and* payment inputs are valid.
+
+#### Data persistence / security notes
+- The app **does not** persist or send full card number (PAN) or CVC.
+- The app may persist only **non-sensitive metadata**:
+  - last selected payment method id
+  - last used **valid card brand** (e.g., visa/mastercard/amex)
+- When submitting an order, only **non-sensitive payment metadata** is attached (brand + last4 derived in-memory).
+=======
 
 ### Payment processing step
 Before the order is created, the app runs a **simulated payment processing** step:

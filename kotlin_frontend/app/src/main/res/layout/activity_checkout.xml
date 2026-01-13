@@ -517,7 +517,7 @@
                             android:id="@+id/paymentMethodCardRadio"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Credit / Debit Card (placeholder)" />
+                            android:text="Credit / Debit Card" />
 
                         <RadioButton
                             android:id="@+id/paymentMethodWalletRadio"
@@ -532,6 +532,133 @@
                             android:text="Cash on Delivery" />
                     </RadioGroup>
 
+                    <!-- Card input fields: shown only when Card method is selected -->
+                    <LinearLayout
+                        android:id="@+id/cardFieldsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/cardNumberInputLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="Card number"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="14dp"
+                            app:boxCornerRadiusBottomStart="14dp"
+                            app:boxCornerRadiusTopEnd="14dp"
+                            app:boxCornerRadiusTopStart="14dp"
+                            app:endIconMode="custom"
+                            app:endIconDrawable="@drawable/ic_category_generic"
+                            app:endIconContentDescription="Card brand">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/cardNumberEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:contentDescription="Card number"
+                                android:inputType="number"
+                                android:maxLines="1" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/cardExpiryInputLayout"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:hint="Expiry (MM/YY)"
+                                app:boxBackgroundMode="outline"
+                                app:boxCornerRadiusBottomEnd="14dp"
+                                app:boxCornerRadiusBottomStart="14dp"
+                                app:boxCornerRadiusTopEnd="14dp"
+                                app:boxCornerRadiusTopStart="14dp">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/cardExpiryEditText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:contentDescription="Card expiry"
+                                    android:inputType="number"
+                                    android:maxLines="1" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <Space
+                                android:layout_width="10dp"
+                                android:layout_height="1dp" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/cardCvcInputLayout"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:hint="CVC"
+                                app:boxBackgroundMode="outline"
+                                app:boxCornerRadiusBottomEnd="14dp"
+                                app:boxCornerRadiusBottomStart="14dp"
+                                app:boxCornerRadiusTopEnd="14dp"
+                                app:boxCornerRadiusTopStart="14dp">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/cardCvcEditText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:contentDescription="Card security code"
+                                    android:inputType="numberPassword"
+                                    android:maxLines="1" />
+                            </com.google.android.material.textfield.TextInputLayout>
+                        </LinearLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/cardNameInputLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:hint="Name on card"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="14dp"
+                            app:boxCornerRadiusBottomStart="14dp"
+                            app:boxCornerRadiusTopEnd="14dp"
+                            app:boxCornerRadiusTopStart="14dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/cardNameEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:contentDescription="Name on card"
+                                android:inputType="textPersonName"
+                                android:maxLines="1" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/cardZipInputLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:hint="ZIP / Postal (optional)"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="14dp"
+                            app:boxCornerRadiusBottomStart="14dp"
+                            app:boxCornerRadiusTopEnd="14dp"
+                            app:boxCornerRadiusTopStart="14dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/cardZipEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:contentDescription="ZIP or postal code (optional)"
+                                android:inputType="textPostalAddress"
+                                android:maxLines="1" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+
                     <TextView
                         android:id="@+id/paymentInlineErrorText"
                         android:layout_width="match_parent"
@@ -540,7 +667,8 @@
                         android:text=""
                         android:textColor="@color/ocean_error"
                         android:textSize="12sp"
-                        android:visibility="gone" />
+                        android:visibility="gone"
+                        android:contentDescription="Payment error" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/mockPaymentSwitch"
